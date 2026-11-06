@@ -5,17 +5,19 @@ local libCode = game:HttpGet(ImGuiURL)
 -- Strip HTML if GitHub served a webpage
 libCode = string.gsub(libCode, "<[^>]*>", "")
 
--- Load the library and capture the returned table
+-- Compile the code
 local libFunc, err = loadstring(libCode)
-if libFunc then
-    local success, returnedImGui = pcall(libFunc)
-    if success and returnedImGui then
-        ImGui = returnedImGui -- Assign it globally
-    else
-        error("ImGui module failed to return a table: " .. tostring(returnedImGui))
-    end
-else
+if not libFunc then
     error("Failed to compile ImGui: " .. tostring(err))
+end
+
+-- Execute the code and capture the returned table
+local success, returnedImGui = pcall(libFunc)
+
+if success and returnedImGui then
+    ImGui = returnedImGui -- Assign it globally so the rest of the script can use it
+else
+    error("ImGui module failed to return a table: " .. tostring(returnedImGui))
 end
 
 local Players = game:GetService("Players")
@@ -147,7 +149,7 @@ end)
 
 RunService.RenderStepped:Connect(function()
     if isAiming and config.AimbotEnabled then
-        if not lockedTarget or not lockedTarget.Parent or not lockedTarget.Parent:FindFirstChild("Humanoid") or lockedTarget.Parent.Humanoid.Health <= 0 then
+        if not lockedTarget or not lockedTarget.Parent or not lockedTarget:FindFirstChild("Humanoid") or lockedTarget.Parent.Humanoid.Health <= 0 then
             lockedTarget = getTarget()
         end
 
