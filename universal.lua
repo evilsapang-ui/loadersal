@@ -1,8 +1,12 @@
--- Fetch ImGui Library
-local ImGuiURL = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/imgui.lua" -- REPLACE WITH YOUR URL
+-- 1. Load ImGui Module
+local ImGuiURL = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/imgui.lua"
 local libCode = game:HttpGet(ImGuiURL)
 
+-- Strip HTML tags if GitHub returns a webpage instead of raw text
+libCode = string.gsub(libCode, "<[^>]*>", "")
+-- Remove the return statement so it executes in the current scope
 libCode = string.gsub(libCode, "return ImGui", "")
+
 local libFunc, err = loadstring(libCode)
 if libFunc then
     libFunc()
@@ -22,7 +26,6 @@ local win = ImGui.Window("Universal Hub", { Position = UDim2.fromOffset(100, 100
 
 local tabs = win:Tabs({"Aimbot", "Visuals"})
 
--- Configuration
 local config = {
     AimbotEnabled = false,
     Fov = 200,
@@ -33,9 +36,7 @@ local config = {
     EspColor = Color3.fromRGB(255, 0, 0)
 }
 
----------------------------------------------------------
 -- AIMBOT TAB
----------------------------------------------------------
 tabs.Aimbot:Checkbox("Enable Aimbot", false, function(v)
     config.AimbotEnabled = v
 end)
@@ -51,9 +52,7 @@ end)
 tabs.Aimbot:Separator()
 tabs.Aimbot:Text("Hold RMB to lock.")
 
----------------------------------------------------------
 -- VISUALS TAB (ESP)
----------------------------------------------------------
 tabs.Visuals:Checkbox("Enable ESP", true, function(v)
     config.EspEnabled = v
     if not v then
@@ -64,14 +63,11 @@ tabs.Visuals:Checkbox("Enable ESP", true, function(v)
     end
 end)
 
----------------------------------------------------------
 -- LOGIC
----------------------------------------------------------
 local isAiming = false
 local lockedTarget = nil
-local activeHighlights = {} -- Character -> Highlight
+local activeHighlights = {}
 
--- Aimbot Input
 UserInputService.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton2 and config.AimbotEnabled then
         isAiming = true
@@ -110,7 +106,6 @@ local function getTarget()
     return target
 end
 
--- ESP Logic
 local function addHighlight(character)
     if not character or not character.Parent then return end
     if activeHighlights[character] then return end
@@ -140,17 +135,15 @@ local function updateESP()
     end
 end
 
--- Auto-update ESP
 task.spawn(function()
     while task.wait(0.5) do
         updateESP()
     end
 end)
 
--- Main Render Loop
 RunService.RenderStepped:Connect(function()
     if isAiming and config.AimbotEnabled then
-        if not lockedTarget or not lockedTarget.Parent or not lockedTarget.Parent:FindFirstChild("Humanoid") or lockedTarget.Parent.Humanoid.Health <= 0 then
+        if not lockedTarget or not lockedTarget.Parent or not lockedTarget:FindFirstChild("Humanoid") or lockedTarget.Parent.Humanoid.Health <= 0 then
             lockedTarget = getTarget()
         end
 
