@@ -17,6 +17,8 @@ else
     error("ImGui module failed to return a table: " .. tostring(returnedImGui))
 end
 
+-- (Keep the ImGui library loader exactly the same)
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -27,31 +29,23 @@ local Camera = workspace.CurrentCamera
 ImGui.Init({ ToggleKey = Enum.KeyCode.RightShift })
 local win = ImGui.Window("Universal Hub", { Position = UDim2.fromOffset(100, 100), Width = 280 })
 
-local tabs = win:Tabs({"Aimbot", "Visuals"})
+local tabs = win:Tabs({"Aimbot", "Visuals", "Settings"})
 
 local config = {
     AimbotEnabled = false,
     Fov = 200,
     Smoothness = 0.9,
     TargetPart = "Head",
-    
     EspEnabled = true,
     EspColor = Color3.fromRGB(255, 0, 0)
 }
 
+local activeHighlights = {} -- Moved up for the toggle callback
+
 -- AIMBOT TAB
-tabs.Aimbot:Checkbox("Enable Aimbot", false, function(v)
-    config.AimbotEnabled = v
-end)
-
-tabs.Aimbot:SliderInt("FOV Radius", 10, 800, 200, function(v)
-    config.Fov = v
-end)
-
-tabs.Aimbot:Slider("Smoothness", 0.1, 1.0, 0.9, function(v)
-    config.Smoothness = v
-end)
-
+tabs.Aimbot:Checkbox("Enable Aimbot", false, function(v) config.AimbotEnabled = v end)
+tabs.Aimbot:SliderInt("FOV Radius", 10, 800, 200, function(v) config.Fov = v end)
+tabs.Aimbot:Slider("Smoothness", 0.1, 1.0, 0.9, function(v) config.Smoothness = v end)
 tabs.Aimbot:Separator()
 tabs.Aimbot:Text("Hold RMB to lock.")
 
@@ -66,12 +60,56 @@ tabs.Visuals:Checkbox("Enable ESP", true, function(v)
     end
 end)
 
+-- SETTINGS TAB (THEMES)
+local themeNames = {"Blue", "Red", "Green", "Maroon", "Purple"}
+tabs.Settings:Combo("UI Theme", themeNames, 1, function(val, idx)
+    ImGui.SetTheme(val)
+end)
+
+---------------------------------------------------------
 -- LOGIC
+---------------------------------------------------------
 local isAiming = false
 local lockedTarget = nil
-local activeHighlights = {} -- Moved this UP so the UI callback can access it
 
--- ... (Aimbot Logic stays the same) ...
+-- (Rest of your Aimbot and ESP Logic stays exactly the same)
+UserInputService.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 and config.AimbotEnabled then
+        isAiming = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        isAiming = false
+        lockedTarget = nil
+    end
+end)
+
+local function getTarget()
+    local target = nil
+    local shortestDistance = math.huge
+    local mousePos = UserInputService:GetMouseLocation()
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local char = player.Character
+            if char and char:FindFirstChild(config.TargetPart) and char:FindFirstChild("HumanoidRootPart") then
+                local part = char[config.TargetPart]
+                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                
+                if onScreen and screenPos.Z > 0 then
+                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                    if distance < shortestDistance and distance < config.Fov then
+                        target = part
+                        shortestDistance = distance
+                    end
+                end
+            end
+        end
+    end
+    return target
+end
 
 local function addHighlight(character)
     if not character or not character.Parent then return end
@@ -88,7 +126,6 @@ local function addHighlight(character)
 end
 
 local function updateESP()
-    -- If it's off, make sure everything is cleared out
     if not config.EspEnabled then
         if next(activeHighlights) then
             for char, highlight in pairs(activeHighlights) do
@@ -119,7 +156,7 @@ end)
 
 RunService.RenderStepped:Connect(function()
     if isAiming and config.AimbotEnabled then
-        if not lockedTarget or not lockedTarget.Parent or not lockedTarget:FindFirstChild("Humanoid") or lockedTarget.Parent.Humanoid.Health <= 0 then
+        if not lockedTarget or not lockedTarget.Parent or not lockedTarget.Parent:FindFirstChild("Humanoid") or lockedTarget.Parent.Humanoid.Health <= 0 then
             lockedTarget = getTarget()
         end
 
