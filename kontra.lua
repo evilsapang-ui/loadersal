@@ -1,16 +1,15 @@
--- 1. Fetch ImGui Library
 local ImGuiURL = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/imgui.lua?t=" .. tostring(os.time())
 local libCode = game:HttpGet(ImGuiURL)
 
--- 2. Strip the `return ImGui` so it executes in the global scope
-libCode = string.gsub(libCode, "return ImGui", "")
 local libFunc, err = loadstring(libCode)
-if libFunc then
-    libFunc()
-else
-    error("Failed to load ImGui: " .. tostring(err))
+if not libFunc then
+	error("Failed to compile ImGui: " .. tostring(err))
 end
 
+local ImGui = libFunc()
+if type(ImGui) ~= "table" then
+	error("ImGui module failed to return a table")
+end
 -- (Keep the top ImGui loader exactly the same)
 
 local UIS = game:GetService("UserInputService")
