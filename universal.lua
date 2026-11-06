@@ -17,8 +17,6 @@ else
     error("ImGui module failed to return a table: " .. tostring(returnedImGui))
 end
 
--- ... rest of the script
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
