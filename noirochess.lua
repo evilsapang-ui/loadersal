@@ -69,15 +69,19 @@ local stats = {
 ImGui.Init({ ToggleKey = Enum.KeyCode.RightShift })
 local win = ImGui.Window("RoChess Noic hub", { Position = UDim2.fromOffset(100, 100), Width = 650 })
 
--- Top status badge (Fixed size and text clipping)
+-- Top status badge (Fixed: only changing the text label properties)
 local statusBadge = win:TextColored("working", Color3.fromRGB(150, 255, 150))
+statusBadge.Instance.TextSize = 12
+statusBadge.Instance.TextXAlignment = Enum.TextXAlignment.Center
+statusBadge.Instance.TextWrapped = false
+statusBadge.Instance.Size = UDim2.new(0, 60, 0, 16)
+statusBadge.Instance.Position = UDim2.new(0, 110, 0, 2)
+statusBadge.Instance.BackgroundTransparency = 1
 statusBadge.Instance.Parent.BackgroundColor3 = Color3.fromRGB(30, 50, 30)
 statusBadge.Instance.Parent.Size = UDim2.new(0, 60, 0, 16)
 statusBadge.Instance.Parent.Position = UDim2.new(0, 110, 0, 2)
-statusBadge.Instance.Parent.TextSize = 12
-statusBadge.Instance.Parent.TextXAlignment = Enum.TextXAlignment.Center
-statusBadge.Instance.Parent.TextWrapped = false
 
+-- Use SidebarTabs
 local tabs = win:SidebarTabs({"Play", "Hub", "Settings"}, 90)
 
 -- ==========================================
@@ -170,7 +174,7 @@ setRight:Text("Noic Hub")
 setRight:Text("Executor: Bunni")
 setRight:Button("Join our Discord", function() end)
 
--- Info bar at the very bottom
+-- Info bar
 win:InfoBar("v1.0.0 | Executor: Bunni", "FPS: 60 | Ping: 30ms")
 
 -- 5. Main Logic Loop
@@ -217,7 +221,8 @@ RunService.RenderStepped:Connect(function()
             
             if config.AutoplayEnabled then
                 targetMove = moveUci
-                moveDelay = os.clock() + math.random(config.MinDelay * 100, config.MaxDelay * 100) / 100
+                -- Fixed math.random decimal bug
+                moveDelay = os.clock() + math.random(math.floor(config.MinDelay * 100), math.floor(config.MaxDelay * 100)) / 100
             end
         end
     end
