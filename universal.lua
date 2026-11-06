@@ -2,16 +2,20 @@
 local ImGuiURL = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/imgui.lua"
 local libCode = game:HttpGet(ImGuiURL)
 
--- Strip HTML tags if GitHub returns a webpage instead of raw text
+-- Strip HTML if GitHub served a webpage
 libCode = string.gsub(libCode, "<[^>]*>", "")
--- Remove the return statement so it executes in the current scope
-libCode = string.gsub(libCode, "return ImGui", "")
 
+-- Load the library and capture the returned table
 local libFunc, err = loadstring(libCode)
 if libFunc then
-    libFunc()
+    local success, returnedImGui = pcall(libFunc)
+    if success and returnedImGui then
+        ImGui = returnedImGui -- Assign it globally
+    else
+        error("ImGui module failed to return a table: " .. tostring(returnedImGui))
+    end
 else
-    error("Failed to load ImGui: " .. tostring(err))
+    error("Failed to compile ImGui: " .. tostring(err))
 end
 
 local Players = game:GetService("Players")
@@ -143,7 +147,7 @@ end)
 
 RunService.RenderStepped:Connect(function()
     if isAiming and config.AimbotEnabled then
-        if not lockedTarget or not lockedTarget.Parent or not lockedTarget:FindFirstChild("Humanoid") or lockedTarget.Parent.Humanoid.Health <= 0 then
+        if not lockedTarget or not lockedTarget.Parent or not lockedTarget.Parent:FindFirstChild("Humanoid") or lockedTarget.Parent.Humanoid.Health <= 0 then
             lockedTarget = getTarget()
         end
 
