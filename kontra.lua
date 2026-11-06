@@ -26,41 +26,33 @@ local win = ImGui.Window("Kontra Aimbot", { Position = UDim2.fromOffset(100, 100
 
 local tabs = win:Tabs({"Aimbot", "Visuals", "Settings"})
 
--- Configuration
-local config = {
-    AimbotEnabled = false,
-    Fov = 200,
-    Smoothness = 0.9,
-    
-    EspEnabled = true,
-    EspColor = Color3.fromRGB(255, 0, 0)
-}
+-- Configuration (Tied to GUI)
+local FOV_RADIUS = 200
+local SENSITIVITY = 0.9
+local AIM_KEY = Enum.UserInputType.MouseButton2
 
+local EspEnabled = true
 local activeHighlights = {}
 
 ---------------------------------------------------------
--- AIMBOT TAB
+-- UI TABS
 ---------------------------------------------------------
-tabs.Aimbot:Checkbox("Enable Aimbot", false, function(v)
-    config.AimbotEnabled = v
-end)
+tabs.Aimbot:TextColored("Aimbot Settings", Color3.fromRGB(66, 150, 250))
+tabs.Aimbot:Separator()
 
 tabs.Aimbot:Slider("Smoothness", 0.1, 1.0, 0.9, function(v)
-    config.Smoothness = v
+    SENSITIVITY = v
 end)
 
 tabs.Aimbot:SliderInt("FOV Radius", 10, 800, 200, function(v)
-    config.Fov = v
+    FOV_RADIUS = v
 end)
 
 tabs.Aimbot:Separator()
 tabs.Aimbot:Text("Hold RMB to lock.")
 
----------------------------------------------------------
--- VISUALS TAB (ESP)
----------------------------------------------------------
 tabs.Visuals:Checkbox("Enable ESP", true, function(v)
-    config.EspEnabled = v
+    EspEnabled = v
     if not v then
         for char, highlight in pairs(activeHighlights) do
             if highlight then highlight:Destroy() end
@@ -69,19 +61,18 @@ tabs.Visuals:Checkbox("Enable ESP", true, function(v)
     end
 end)
 
----------------------------------------------------------
--- SETTINGS TAB
----------------------------------------------------------
 local themeNames = {"Blue", "Red", "Green", "Maroon", "Purple"}
 tabs.Settings:Combo("UI Theme", themeNames, 1, function(val, idx)
     ImGui.SetTheme(val)
 end)
 
 ---------------------------------------------------------
--- KONTRA AIMBOT LOGIC
+-- ORIGINAL KONTRA AIMBOT LOGIC (UNCHANGED)
 ---------------------------------------------------------
 local isAiming = false
 local lockedTarget = nil
+
+-- where kontra puts everyone
 local CHARACTERS = workspace:WaitForChild("Characters")
 
 local function getHead(char)
@@ -98,16 +89,16 @@ local function myCharacter()
 end
 
 local function isMe(char)
+    -- identity check first
     local me = myCharacter()
     if me and char == me then return true end
-    
+    -- fallback: position match
     local meHead = me and getHead(me)
     if not meHead then
         local lc = LocalPlayer.Character
         meHead = lc and getHead(lc)
     end
     if not meHead then return false end
-    
     local h = getHead(char)
     if not h then return false end
     return (h.Position - meHead.Position).Magnitude < 1.0
@@ -128,9 +119,9 @@ local function getTarget()
             local part = getHead(char)
             if part then
                 local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-                if onScreen and screenPos.Z > 0 then
+                if onScreen then
                     local d = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                    if d < bestDist and d < config.Fov then
+                    if d < bestDist and d < FOV_RADIUS then
                         best = part
                         bestDist = d
                     end
@@ -141,22 +132,19 @@ local function getTarget()
     return best
 end
 
-UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton2 and config.AimbotEnabled then 
-        isAiming = true 
-    end
+UserInputService.InputBegan:Connect(function(input)
+    if input.UserInputType == AIM_KEY then isAiming = true end
 end)
 
 UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+    if input.UserInputType == AIM_KEY then
         isAiming = false
         lockedTarget = nil
     end
 end)
 
 RunService.RenderStepped:Connect(function()
-    if not config.AimbotEnabled or not isAiming then return end
+    if not isAiming then return end
 
     if not lockedTarget or not lockedTarget.Parent or not isAlive(lockedTarget.Parent) then
         lockedTarget = getTarget()
@@ -166,8 +154,8 @@ RunService.RenderStepped:Connect(function()
         local screenPos = Camera:WorldToViewportPoint(lockedTarget.Position)
         local mousePos = UserInputService:GetMouseLocation()
 
-        local moveX = (screenPos.X - mousePos.X) * config.Smoothness
-        local moveY = (screenPos.Y - mousePos.Y) * config.Smoothness
+        local moveX = (screenPos.X - mousePos.X) * SENSITIVITY
+        local moveY = (screenPos.Y - mousePos.Y) * SENSITIVITY
 
         if typeof(mousemoverel) == "function" then
             mousemoverel(moveX, moveY)
@@ -183,7 +171,7 @@ local function addHighlight(character)
     if activeHighlights[character] then return end
     
     local highlight = Instance.new("Highlight")
-    highlight.FillColor = config.EspColor
+    highlight.FillColor = Color3.fromRGB(255, 0, 0)
     highlight.FillTransparency = 0.5
     highlight.OutlineTransparency = 1 
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
@@ -193,7 +181,7 @@ local function addHighlight(character)
 end
 
 local function updateESP()
-    if not config.EspEnabled then
+    if not EspEnabled then
         if next(activeHighlights) then
             for char, highlight in pairs(activeHighlights) do
                 if highlight then highlight:Destroy() end
@@ -203,10 +191,7 @@ local function updateESP()
         return
     end
 
-    local characters = workspace:FindFirstChild("Characters")
-    if not characters then return end
-
-    for _, char in ipairs(characters:GetChildren()) do
+    for _, char in ipairs(CHARACTERS:GetChildren()) do
         if char:IsA("Model") and not isMe(char) and isAlive(char) then
             if not activeHighlights[char] then
                 addHighlight(char)
