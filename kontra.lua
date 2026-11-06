@@ -1,16 +1,16 @@
--- 1. Load ImGui Module
 local ImGuiURL = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/imgui.lua?t=" .. tostring(os.time())
 local libCode = game:HttpGet(ImGuiURL)
 
--- Compile the code
+-- Force the return statement in case the file on GitHub is missing it
+libCode = libCode .. "\n\nreturn ImGui"
+
 local libFunc, err = loadstring(libCode)
 if not libFunc then
     error("Failed to compile ImGui: " .. tostring(err))
 end
 
--- Execute the code and capture the returned table
+-- Execute and capture
 local success, returnedImGui = pcall(libFunc)
-
 if success and returnedImGui then
     ImGui = returnedImGui
 else
@@ -21,9 +21,11 @@ local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 
+-- Initialize UI
 ImGui.Init({ ToggleKey = Enum.KeyCode.RightShift })
 local win = ImGui.Window("Kontra Aimbot", { Position = UDim2.fromOffset(100, 100), Width = 280 })
 
+-- (The rest of your Kontra UI logic goes here)
 local tabs = win:Tabs({"Aimbot", "Settings"})
 
 local config = {
