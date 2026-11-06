@@ -591,4 +591,4 @@ function ImGui.Window(title, opts)
 	return body
 end
 
-return imgui
+return ImGui
