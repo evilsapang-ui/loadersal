@@ -27,7 +27,6 @@ local Bot = require(ChessFolder.Bot)
 local enabled = true
 local currentBestMove = nil
 
--- Find the game controller (to get the board and session)
 local controller = nil
 for _, mod in pairs(getloadedmodules()) do
     if mod.Name == "App" or mod.Name == "Main" or mod.Name == "Client" then
@@ -70,24 +69,25 @@ local stats = {
 ImGui.Init({ ToggleKey = Enum.KeyCode.RightShift })
 local win = ImGui.Window("RoChess Noic hub", { Position = UDim2.fromOffset(100, 100), Width = 650 })
 
--- Add the "working" status badge top right
+-- Top status badge (Fixed size and text clipping)
 local statusBadge = win:TextColored("working", Color3.fromRGB(150, 255, 150))
 statusBadge.Instance.Parent.BackgroundColor3 = Color3.fromRGB(30, 50, 30)
 statusBadge.Instance.Parent.Size = UDim2.new(0, 60, 0, 16)
 statusBadge.Instance.Parent.Position = UDim2.new(0, 110, 0, 2)
 statusBadge.Instance.Parent.TextSize = 12
 statusBadge.Instance.Parent.TextXAlignment = Enum.TextXAlignment.Center
+statusBadge.Instance.Parent.TextWrapped = false
 
--- Use your custom SidebarTabs
 local tabs = win:SidebarTabs({"Play", "Hub", "Settings"}, 90)
 
 -- ==========================================
 -- PLAY TAB
 -- ==========================================
 local cols = tabs.Play:Columns(2)
+local left = cols[1]
+local right = cols[2]
 
 -- Left Column
-local left = cols[1]
 left:Section("Engine")
 left:Checkbox("Engine", false, function(v) config.AutoplayEnabled = v end)
 left:SubText("Use with caution. Using max settings on a rookie account may get your account reported and banned.")
@@ -105,7 +105,6 @@ local statLabel = left:TextDisabled("Depth 0 | 0k nodes | 0.00s")
 local statusLabel = left:TextDisabled("Status: off")
 
 -- Right Column
-local right = cols[2]
 right:Section("Timing")
 right:Slider("Min delay", 0.1, 5, 0.6, function(v) config.MinDelay = v end)
 right:Slider("Max delay", 0.1, 10, 2.4, function(v) config.MaxDelay = v end)
@@ -115,6 +114,7 @@ right:Slider("Max delay", 0.1, 10, 2.4, function(v) config.MaxDelay = v end)
 -- ==========================================
 local hubCols = tabs.Hub:Columns(2)
 local hubLeft = hubCols[1]
+
 hubLeft:Section("Info")
 hubLeft:Text("Executor: " .. (identifyexecutor and identifyexecutor() or "Unknown"))
 hubLeft:Text("Menu key: Right Shift")
@@ -129,9 +129,10 @@ end)
 -- SETTINGS TAB
 -- ==========================================
 local setCols = tabs.Settings:Columns(2)
+local setLeft = setCols[1]
+local setRight = setCols[2]
 
 -- Left Column
-local setLeft = setCols[1]
 setLeft:Section("Appearance")
 setLeft:Dropdown("Theme", {"default", "Dark", "Light"}, 1, function(val) end)
 setLeft:Checkbox("Rainbow top bar", false, function(v) end)
@@ -148,7 +149,6 @@ setLeft:Checkbox("Info bar", true, function(v) end)
 setLeft:Button("Center window", function() end)
 
 -- Right Column
-local setRight = setCols[2]
 setRight:Section("Menu")
 setRight:Keybind("Menu key", Enum.KeyCode.RightShift, nil, function(k) end)
 setRight:Button("Unload", function() win:Destroy() end)
