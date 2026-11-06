@@ -1,16 +1,21 @@
+-- 1. Load ImGui Module
 local ImGuiURL = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/imgui.lua?t=" .. tostring(os.time())
 local libCode = game:HttpGet(ImGuiURL)
 
+-- Compile the code
 local libFunc, err = loadstring(libCode)
 if not libFunc then
-	error("Failed to compile ImGui: " .. tostring(err))
+    error("Failed to compile ImGui: " .. tostring(err))
 end
 
-local ImGui = libFunc()
-if type(ImGui) ~= "table" then
-	error("ImGui module failed to return a table")
+-- Execute the code and capture the returned table
+local success, returnedImGui = pcall(libFunc)
+
+if success and returnedImGui then
+    ImGui = returnedImGui
+else
+    error("ImGui module failed to return a table: " .. tostring(returnedImGui))
 end
--- (Keep the top ImGui loader exactly the same)
 
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
