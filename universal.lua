@@ -2,23 +2,22 @@
 local ImGuiURL = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/imgui.lua"
 local libCode = game:HttpGet(ImGuiURL)
 
--- Strip HTML if GitHub served a webpage
-libCode = string.gsub(libCode, "<[^>]*>", "")
-
--- Force the library to return the table at the very end, no matter what
-libCode = libCode .. "\n\nreturn ImGui"
-
+-- Compile the code
 local libFunc, err = loadstring(libCode)
-if libFunc then
-    local success, returnedImGui = pcall(libFunc)
-    if success and returnedImGui then
-        ImGui = returnedImGui 
-    else
-        error("ImGui module failed to execute: " .. tostring(returnedImGui))
-    end
-else
+if not libFunc then
     error("Failed to compile ImGui: " .. tostring(err))
 end
+
+-- Execute the code and capture the returned table
+local success, returnedImGui = pcall(libFunc)
+
+if success and returnedImGui then
+    ImGui = returnedImGui
+else
+    error("ImGui module failed to return a table: " .. tostring(returnedImGui))
+end
+
+-- ... rest of the script
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
