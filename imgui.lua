@@ -591,4 +591,64 @@ function ImGui.Window(title, opts)
 	return body
 end
 
+------------------------------------------------------------------ THEME SWITCHING
+local function ckey(c)
+	return string.format("%d,%d,%d",
+		math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
+end
+
+ImGui.Themes = {
+	Blue   = { Accent = C(66,150,250), Dark = C(41,74,122),  Active = C(15,135,250), Grab = C(61,133,224), Window = C(15,15,15), Border = C(110,110,128), Plot = C(230,179,0) },
+	Red    = { Accent = C(250,66,66),  Dark = C(122,41,41),  Active = C(250,15,15),  Grab = C(224,61,61),  Window = C(17,12,12), Border = C(128,110,110), Plot = C(255,200,0) },
+	Green  = { Accent = C(66,250,110), Dark = C(41,122,62),  Active = C(15,250,70),  Grab = C(61,224,98),  Window = C(12,17,13), Border = C(110,128,114), Plot = C(255,230,0) },
+	Maroon = { Accent = C(176,48,64),  Dark = C(88,20,32),   Active = C(210,40,60),  Grab = C(150,36,52),  Window = C(18,10,12), Border = C(120,90,96),   Plot = C(230,150,60) },
+	Purple = { Accent = C(160,90,250), Dark = C(80,45,122),  Active = C(140,40,250), Grab = C(140,75,224), Window = C(14,12,18), Border = C(114,110,128), Plot = C(255,200,0) },
+}
+
+local currentPalette = ImGui.Themes.Blue
+
+function ImGui.SetTheme(t)
+	if type(t) == "string" then t = ImGui.Themes[t] end
+	if type(t) ~= "table" then return end
+
+	-- fill any missing keys from Blue so custom themes can be partial
+	local new = {}
+	for k, v in pairs(ImGui.Themes.Blue) do new[k] = t[k] or v end
+
+	-- old color -> new color
+	local map = {}
+	for k in pairs(ImGui.Themes.Blue) do
+		map[ckey(currentPalette[k])] = new[k]
+	end
+
+	-- recolor everything that already exists
+	if gui then
+		for _, d in ipairs(gui:GetDescendants()) do
+			if d:IsA("GuiObject") then
+				local n = map[ckey(d.BackgroundColor3)]
+				if n then d.BackgroundColor3 = n end
+			elseif d:IsA("UIStroke") then
+				local n = map[ckey(d.Color)]
+				if n then d.Color = n end
+			end
+		end
+	end
+
+	-- update the theme tables so new widgets and hover effects use the new colors
+	for _, k in ipairs({ "FrameBg", "FrameBgHovered", "FrameBgActive", "TitleBgActive",
+		"Button", "ButtonHovered", "Header", "HeaderHovered", "HeaderActive" }) do
+		Theme[k][1] = (k == "FrameBg" or k == "TitleBgActive") and new.Dark or new.Accent
+	end
+	Theme.ButtonActive[1] = new.Active
+	Theme.WindowBg[1] = new.Window
+	Theme.CheckMark = new.Accent
+	Theme.SliderGrab = new.Grab
+	Theme.SliderGrabActive = new.Accent
+	Theme.Border = new.Border
+	Theme.Separator = new.Border
+	Theme.PlotFill = new.Plot
+
+	currentPalette = new
+end
+
 return ImGui
