@@ -631,6 +631,318 @@ function Container:TextBox(label, default, callback, placeholder, opts)
 	}
 end
 
+------------------------------------------------------------------ SECTION HEADER  ( | Engine )
+function Container:Section(title)
+	local r = row(self, 18)
+	make("Frame", {
+		Size = UDim2.new(0, 2, 1, -4),
+		Position = UDim2.fromOffset(0, 2),
+		BackgroundColor3 = Theme.CheckMark,
+	}, r)
+	make("TextLabel", {
+		Text = title,
+		Size = UDim2.new(1, -10, 1, 0),
+		Position = UDim2.fromOffset(8, 0),
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, r)
+	return r
+end
+
+------------------------------------------------------------------ SUB TEXT (gray, wrapped, indented under checkbox)
+function Container:SubText(text, indent)
+	local l = make("TextLabel", {
+		Text = text,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		TextWrapped = true,
+		TextSize = FONT_SIZE - 2,
+		TextColor3 = Theme.TextDisabled,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		LayoutOrder = self:_order(),
+	}, self.Frame)
+	make("UIPadding", { PaddingLeft = UDim.new(0, indent == nil and (ITEM_H + 6) or indent) }, l)
+	return { Set = function(_, t) l.Text = t end, Get = function() return l.Text end, Instance = l }
+end
+
+------------------------------------------------------------------ COLUMNS
+-- local cols = parent:Columns(2); cols[1]:Text("left"); cols[2]:Text("right")
+function Container:Columns(count, gap)
+	count = count or 2
+	gap = gap or 8
+	local holder = make("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = self:_order(),
+	}, self.Frame)
+	make("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, gap),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		VerticalAlignment = Enum.VerticalAlignment.Top,
+	}, holder)
+
+	local cols = {}
+	for i = 1, count do
+		local c = newContainer(holder, {
+			Size = UDim2.new(1 / count, -gap * (count - 1) / count, 0, 0),
+			LayoutOrder = i,
+		})
+		cols[i] = c
+	end
+	return cols
+end
+
+------------------------------------------------------------------ BUTTON GROUP (grid, e.g. 2x2)
+-- parent:ButtonGroup(2, { {"Save", fn}, {"Load", fn}, {"Delete", fn}, {"Refresh", fn} })
+function Container:ButtonGroup(cols, buttons, gap)
+	cols = cols or 2
+	gap = gap or 4
+	local holder = make("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = self:_order(),
+	}, self.Frame)
+	make("UIGridLayout", {
+		CellSize = UDim2.new(1 / cols, -gap * (cols - 1) / cols, 0, ITEM_H),
+		CellPadding = UDim2.fromOffset(gap, gap),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, holder)
+
+	local handles = {}
+	for i, def in ipairs(buttons) do
+		local b = make("TextButton", {
+			Text = def[1],
+			AutoButtonColor = false,
+			LayoutOrder = i,
+		}, holder)
+		interactive(b, b, Theme.Button, Theme.ButtonHovered, Theme.ButtonActive)
+		b.MouseButton1Click:Connect(function() if def[2] then def[2]() end end)
+		handles[def[1]] = { SetText = function(_, t) b.Text = t end, Instance = b }
+	end
+	return handles
+end
+
+------------------------------------------------------------------ CONFIG DROPDOWN (label on top, items can be refreshed)
+function Container:Dropdown(label, items, defaultIndex, callback)
+	items = items or {}
+	local index = (#items > 0) and (defaultIndex or 1) or 0
+
+	local holder = make("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = self:_order(),
+	}, self.Frame)
+	make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) }, holder)
+
+	if label and label ~= "" then
+		make("TextLabel", {
+			Text = label,
+			Size = UDim2.new(1, 0, 0, 16),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			LayoutOrder = 1,
+		}, holder)
+	end
+
+	local main = make("TextButton", {
+		Text = "",
+		Size = UDim2.new(1, 0, 0, ITEM_H),
+		AutoButtonColor = false,
+		LayoutOrder = 2,
+	}, holder)
+	interactive(main, main, Theme.FrameBg, Theme.FrameBgHovered, Theme.FrameBgActive)
+	local cur = make("TextLabel", {
+		Size = UDim2.new(1, -ITEM_H - 8, 1, 0),
+		Position = UDim2.fromOffset(4, 0),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, main)
+	local arrowBox = make("Frame", {
+		Size = UDim2.fromOffset(ITEM_H, ITEM_H),
+		Position = UDim2.new(1, -ITEM_H, 0, 0),
+	}, main)
+	paint(arrowBox, Theme.Button)
+	make("TextLabel", { Text = "v", Size = UDim2.fromScale(1, 1) }, arrowBox)
+
+	local list = make("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Visible = false,
+		LayoutOrder = 3,
+	}, holder)
+	paint(list, { C(20, 20, 20), 0 })
+	make("UIStroke", { Color = Theme.Border, Transparency = 0.5 }, list)
+	make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }, list)
+
+	local h = {}
+	local buttons = {}
+
+	local function refresh()
+		cur.Text = tostring(items[index] or "")
+		for i, b in ipairs(buttons) do
+			b.BackgroundColor3 = Theme.Header[1]
+			b.BackgroundTransparency = (i == index) and Theme.Header[2] or 1
+		end
+	end
+
+	local function rebuild()
+		for _, b in ipairs(buttons) do b:Destroy() end
+		buttons = {}
+		for i, item in ipairs(items) do
+			local b = make("TextButton", {
+				Text = "  " .. tostring(item),
+				Size = UDim2.new(1, 0, 0, 18),
+				TextXAlignment = Enum.TextXAlignment.Left,
+				AutoButtonColor = false,
+				LayoutOrder = i,
+			}, list)
+			b.MouseEnter:Connect(function() paint(b, Theme.HeaderHovered) end)
+			b.MouseLeave:Connect(refresh)
+			b.MouseButton1Click:Connect(function()
+				h:Set(i)
+				list.Visible = false
+			end)
+			buttons[i] = b
+		end
+		refresh()
+	end
+
+	function h:Set(i, silent)
+		if #items == 0 then index = 0 refresh() return end
+		index = math.clamp(i, 1, #items)
+		refresh()
+		if callback and not silent then callback(items[index], index) end
+	end
+	function h:Get() return items[index], index end
+	function h:SetItems(newItems, keepSelection)
+		local old = items[index]
+		items = newItems or {}
+		index = (#items > 0) and 1 or 0
+		if keepSelection and old then
+			for i, v in ipairs(items) do if v == old then index = i break end end
+		end
+		rebuild()
+	end
+
+	main.MouseButton1Click:Connect(function() list.Visible = not list.Visible end)
+	rebuild()
+	return h
+end
+
+------------------------------------------------------------------ SIDEBAR TABS
+-- local t = parent:SidebarTabs({"Play","Settings"}, 90)
+-- t.Play:Text("..."); t.Settings:Text("..."); t:Select("Settings")
+function Container:SidebarTabs(names, sidebarWidth)
+	sidebarWidth = sidebarWidth or 90
+	local holder = make("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = self:_order(),
+	}, self.Frame)
+	make("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		VerticalAlignment = Enum.VerticalAlignment.Top,
+	}, holder)
+
+	local side = make("Frame", {
+		Size = UDim2.new(0, sidebarWidth, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = 1,
+	}, holder)
+	paint(side, { C(10, 10, 10), 0.3 })
+	make("UIStroke", { Color = Theme.Border, Transparency = 0.7 }, side)
+	make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) }, side)
+	make("UIPadding", {
+		PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4),
+		PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4),
+	}, side)
+
+	local content = make("Frame", {
+		Size = UDim2.new(1, -(sidebarWidth + 6), 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = 2,
+	}, holder)
+	make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }, content)
+
+	local pages, btns, result = {}, {}, {}
+	local function select(name)
+		for n, p in pairs(pages) do
+			local on = (n == name)
+			p.Frame.Visible = on
+			btns[n].BackgroundColor3 = on and Theme.Header[1] or Theme.Button[1]
+			btns[n].BackgroundTransparency = on and 0.2 or 1
+			btns[n].TextColor3 = on and Theme.Text or Theme.TextDisabled
+		end
+	end
+	for i, name in ipairs(names) do
+		local b = make("TextButton", {
+			Text = name,
+			Size = UDim2.new(1, 0, 0, 24),
+			AutoButtonColor = false,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			LayoutOrder = i,
+		}, side)
+		make("UIPadding", { PaddingLeft = UDim.new(0, 8) }, b)
+		btns[name] = b
+		b.MouseEnter:Connect(function()
+			if not pages[name].Frame.Visible then
+				b.BackgroundColor3 = Theme.HeaderHovered[1]
+				b.BackgroundTransparency = 0.6
+			end
+		end)
+		b.MouseLeave:Connect(function()
+			if not pages[name].Frame.Visible then b.BackgroundTransparency = 1 end
+		end)
+		pages[name] = newContainer(content, { Visible = false })
+		result[name] = pages[name]
+		b.MouseButton1Click:Connect(function() select(name) end)
+	end
+	select(names[1])
+	result.Select = function(_, n) select(n) end
+	return result
+end
+
+------------------------------------------------------------------ BOTTOM INFO BAR
+-- local bar = win:InfoBar("v1.0", "FPS: 60")   -- call last so it sits at the bottom
+-- bar:Set("left", "right")
+function Container:InfoBar(left, right)
+	local r = row(self, 18)
+	paint(r, { C(10, 10, 10), 0 })
+	make("UIStroke", { Color = Theme.Border, Transparency = 0.7 }, r)
+	local l = make("TextLabel", {
+		Text = left or "",
+		TextSize = FONT_SIZE - 2,
+		TextColor3 = Theme.TextDisabled,
+		Size = UDim2.new(0.5, -6, 1, 0),
+		Position = UDim2.fromOffset(6, 0),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, r)
+	local rt = make("TextLabel", {
+		Text = right or "",
+		TextSize = FONT_SIZE - 2,
+		TextColor3 = Theme.TextDisabled,
+		Size = UDim2.new(0.5, -6, 1, 0),
+		Position = UDim2.new(0.5, 0, 0, 0),
+		TextXAlignment = Enum.TextXAlignment.Right,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, r)
+	return {
+		Set = function(_, a, b)
+			if a ~= nil then l.Text = a end
+			if b ~= nil then rt.Text = b end
+		end,
+		Instance = r,
+	}
+end
+
 local gui
 local zCounter = 1
 
