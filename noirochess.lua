@@ -16,7 +16,6 @@ end
 
 -- 2. Game Hooks
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ChessClient = ReplicatedStorage:WaitForChild("ChessClient")
 local Engine = require(ReplicatedStorage.Chess.Engine)
 local Bot = require(ReplicatedStorage.Chess.Bot)
 
@@ -35,7 +34,7 @@ for _, mod in pairs(getloadedmodules()) do
 end
 
 if not controller then
-    return warn("Could not find the game controller. Make sure you are in a game.")
+    return warn("[NoiRoChess] Could not find the game controller. Make sure you are in an active game.")
 end
 
 local board = controller.board
@@ -47,7 +46,7 @@ board.setArrow = function(self, name, from, to, color, thickness)
     end
 end
 
--- 3. Configuration
+-- 3. Configuration State
 local config = {
     AutoplayEnabled = false,
     HintsEnabled = false,
@@ -64,7 +63,7 @@ local stats = {
     Status = "no game"
 }
 
--- 4. UI Setup
+-- 4. Build the UI
 ImGui.Init({ ToggleKey = Enum.KeyCode.RightShift })
 local win = ImGui.Window("NoiRoChess Hub", { Position = UDim2.fromOffset(100, 100), Width = 320 })
 
@@ -81,16 +80,16 @@ tabs.Play:Spacing(10)
 tabs.Play:TextColored("[Hints (Board ESP)]", Color3.fromRGB(100, 200, 100))
 tabs.Play:Checkbox("Show Hints", false, function(v)
     config.HintsEnabled = v
-    if not v then board:setArrow("best", nil) end
+    if not v and board then board:setArrow("best", nil) end
 end)
-tabs.Play:TextDisabled("Shows the move on the board.")
+tabs.Play:TextDisabled("Shows the best move arrow on the board.")
 
 tabs.Play:SliderInt("Depth limit", 1, 30, 22, function(v) config.DepthLimit = v end)
 tabs.Play:Slider("Think time", 0.1, 10, 2.5, function(v) config.ThinkTime = v end)
 
 tabs.Play:Spacing(10)
 local statLabel = tabs.Play:Text("Depth 0 | 0k nodes | 0.00s")
-tabs.Play:Text("Status: no game")
+local statusLabel = tabs.Play:Text("Status: no game")
 
 -- HUB TAB
 tabs.Hub:TextColored("[Info]", Color3.fromRGB(100, 200, 100))
@@ -109,71 +108,76 @@ tabs.Settings:Slider("Max delay", 0.1, 10, 2.4, function(v) config.MaxDelay = v 
 
 -- 5. Main Logic Loop
 local RunService = game:GetService("RunService")
-local lastMoveTime = 0
-local currentTargetMove = nil
+local moveDelay = 0
+local targetMove = nil
 
 RunService.RenderStepped:Connect(function()
     if not enabled then return end
+    
     local session = controller.session
     if not session or session.kind == "analysis" then 
         stats.Status = "no game"
         return 
     end
 
-    -- Only run if it's our turn
-    local isMyTurn = (session.myColor == 1 and session:engineAt(#session.ucis).side == 1) or 
-                     (session.myColor == -1 and session:engineAt(#session.ucis).side == -1)
+    -- Check whose turn it is
+    local engine = session:engineAt(#session.ucis)
+    local isMyTurn = (session.myColor == 1 and engine.side == 1) or 
+                     (session.myColor == -1 and engine.side == -1)
     
     if not isMyTurn then 
-        stats.Status = "waiting..."
+        stats.Status = "waiting for opponent"
         return 
     end
 
     stats.Status = "thinking..."
 
-    -- Calculate best move
+    -- Run engine
     local fen = session.startFen or Engine.START_FEN
     local startTime = os.clock()
     
-    local moveUci, info = Bot.think(fen, session.ucis, {rating = 3000, depth = config.DepthLimit, time = config.ThinkTime})
-    
-    if moveUci then
-        stats.Depth = info and info.depth or config.DepthLimit
-        stats.Nodes = info and info.nodes or 0
-        stats.Time = os.clock() - startTime
+    -- If we don't already have a locked move for this turn, calculate one
+    if not targetMove then
+        local moveUci, info = Bot.think(fen, session.ucis, {rating = 3000, depth = config.DepthLimit, time = config.ThinkTime})
+        
+        if moveUci then
+            stats.Depth = info and info.depth or config.DepthLimit
+            stats.Nodes = info and info.nodes or 0
+            stats.Time = os.clock() - startTime
 
-        local fromSquare = Engine.algToIndex64((string.sub(moveUci, 1, 2)))
-        local toSquare = Engine.algToIndex64((string.sub(moveUci, 3, 4)))
+            local fromSquare = Engine.algToIndex64((string.sub(moveUci, 1, 2)))
+            local toSquare = Engine.algToIndex64((string.sub(moveUci, 3, 4)))
 
-        -- Draw Hint
-        if config.HintsEnabled then
-            board:setArrow("best", fromSquare, toSquare, Color3.fromRGB(46, 196, 182), 0.2)
-        else
-            board:setArrow("best", nil)
-        end
+            if config.HintsEnabled then
+                board:setArrow("best", fromSquare, toSquare, Color3.fromRGB(46, 196, 182), 0.2)
+            else
+                board:setArrow("best", nil)
+            end
 
-        -- Autoplay
-        if config.AutoplayEnabled and not currentTargetMove then
-            local delay = math.random(config.MinDelay * 100, config.MaxDelay * 100) / 100
-            currentTargetMove = { uci = moveUci, playAt = os.clock() + delay }
+            if config.AutoplayEnabled then
+                targetMove = moveUci
+                moveDelay = os.clock() + math.random(config.MinDelay * 100, config.MaxDelay * 100) / 100
+            end
         end
     end
 
-    -- Play the move when the delay is up
-    if config.AutoplayEnabled and currentTargetMove then
-        if os.clock() >= currentTargetMove.playAt then
+    -- Handle autoplay delay
+    if config.AutoplayEnabled and targetMove then
+        if os.clock() >= moveDelay then
             stats.Status = "playing..."
-            session:applyUci(currentTargetMove.uci)
-            currentTargetMove = nil
+            session:applyUci(targetMove)
+            targetMove = nil
+            if config.HintsEnabled then board:setArrow("best", nil) end
         end
     end
 end)
 
--- 6. UI Updater
+-- 6. UI Updater (Runs every 0.1s to keep the stats text accurate)
 task.spawn(function()
     while task.wait(0.1) do
         if statLabel then
             statLabel:Set(string.format("Depth %d | %.1fk nodes | %.2fs", stats.Depth, stats.Nodes / 1000, stats.Time))
+            statusLabel:Set("Status: " .. stats.Status)
         end
     end
 end)
