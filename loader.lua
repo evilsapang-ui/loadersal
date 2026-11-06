@@ -1,9 +1,10 @@
 local KontraID = 87204735676240
+local timestamp = "?t=" .. tostring(os.time()) -- bypasses GitHub cache
 
 local URLs = {
-    ImGui = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/imgui.lua",
-    Kontra = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/refs/heads/main/kontra.lua",
-    Universal = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/universal.lua"
+    ImGui = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/imgui.lua" .. timestamp,
+    Kontra = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/kontra.lua" .. timestamp,
+    Universal = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/universal.lua" .. timestamp
 }
 
 local function loadScript(url)
