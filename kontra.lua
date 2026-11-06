@@ -11,13 +11,16 @@ else
     error("Failed to load ImGui: " .. tostring(err))
 end
 
--- 3. Now run the Kontra Aimbot
+-- (Keep the top ImGui loader exactly the same)
+
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 
 ImGui.Init({ ToggleKey = Enum.KeyCode.RightShift })
 local win = ImGui.Window("Kontra Aimbot", { Position = UDim2.fromOffset(100, 100), Width = 280 })
+
+local tabs = win:Tabs({"Aimbot", "Settings"})
 
 local config = {
     Enabled = false,
@@ -26,24 +29,31 @@ local config = {
     TargetPart = "Head"
 }
 
-win:TextColored("Aimbot Settings", Color3.fromRGB(66, 150, 250))
-win:Separator()
+tabs.Aimbot:TextColored("Aimbot Settings", Color3.fromRGB(66, 150, 250))
+tabs.Aimbot:Separator()
 
-win:Checkbox("Enable Aimbot", false, function(v)
+tabs.Aimbot:Checkbox("Enable Aimbot", false, function(v)
     config.Enabled = v
 end)
 
-win:Slider("Smoothness", 0.01, 1.0, 0.15, function(v)
+tabs.Aimbot:Slider("Smoothness", 0.01, 1.0, 0.15, function(v)
     config.Smoothness = v
 end)
 
-win:SliderInt("FOV Radius", 10, 600, 150, function(v)
+tabs.Aimbot:SliderInt("FOV Radius", 10, 600, 150, function(v)
     config.Fov = v
 end)
 
-win:Separator()
-win:Text("Hold RMB to lock.")
+tabs.Aimbot:Separator()
+tabs.Aimbot:Text("Hold RMB to lock.")
 
+-- SETTINGS TAB (THEMES)
+local themeNames = {"Blue", "Red", "Green", "Maroon", "Purple"}
+tabs.Settings:Combo("UI Theme", themeNames, 1, function(val, idx)
+    ImGui.SetTheme(val)
+end)
+
+-- (Rest of your Kontra Aiming logic stays exactly the same)
 local fovCircle = Drawing.new("Circle")
 fovCircle.Color = Color3.fromRGB(66, 150, 250)
 fovCircle.Thickness = 1
