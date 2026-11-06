@@ -71,102 +71,107 @@ ImGui.Init({ ToggleKey = Enum.KeyCode.RightShift })
 local win = ImGui.Window("RoChess Noic hub", { Position = UDim2.fromOffset(100, 100), Width = 650 })
 
 -- Add the "working" status badge top right
-local statusBadge = win:TextColored("  working  ", Color3.fromRGB(150, 255, 150))
+local statusBadge = win:TextColored("working", Color3.fromRGB(150, 255, 150))
 statusBadge.Instance.Parent.BackgroundColor3 = Color3.fromRGB(30, 50, 30)
 statusBadge.Instance.Parent.Size = UDim2.new(0, 60, 0, 16)
-statusBadge.Instance.Parent.Position = UDim2.new(0, 120, 0, 2)
+statusBadge.Instance.Parent.Position = UDim2.new(0, 110, 0, 2)
+statusBadge.Instance.Parent.TextSize = 12
+statusBadge.Instance.Parent.TextXAlignment = Enum.TextXAlignment.Center
 
-local tabs = win:Tabs({"Play", "Hub", "Settings"})
+-- Use your custom SidebarTabs
+local tabs = win:SidebarTabs({"Play", "Hub", "Settings"}, 90)
 
+-- ==========================================
 -- PLAY TAB
-local left, right = tabs.Play:Column()
+-- ==========================================
+local cols = tabs.Play:Columns(2)
 
--- Left Column (Engine)
-local engineCard = left:GroupCard()
-engineCard:SectionHeader("Engine")
-engineCard:Checkbox("Engine", false, function(v) config.AutoplayEnabled = v end)
-engineCard:TextDisabled("Use with caution. Using max settings on a rookie account may get your account reported and banned.")
+-- Left Column
+local left = cols[1]
+left:Section("Engine")
+left:Checkbox("Engine", false, function(v) config.AutoplayEnabled = v end)
+left:SubText("Use with caution. Using max settings on a rookie account may get your account reported and banned.")
 
-engineCard:Spacing(8)
-engineCard:Checkbox("Hints (Board ESP)", false, function(v)
+left:Checkbox("Hints (Board ESP)", false, function(v)
     config.HintsEnabled = v
     if not v and board then board:setArrow("best", nil) end
 end)
-engineCard:TextDisabled("Shows the move on the board.")
+left:SubText("Shows the move on the board.")
 
-engineCard:SliderInt("Depth limit", 1, 30, 22, function(v) config.DepthLimit = v end)
-engineCard:Slider("Think time", 0.1, 10, 2.5, function(v) config.ThinkTime = v end)
+left:SliderInt("Depth limit", 1, 30, 22, function(v) config.DepthLimit = v end)
+left:Slider("Think time", 0.1, 10, 2.5, function(v) config.ThinkTime = v end)
 
-engineCard:Spacing(8)
-local statLabel = engineCard:TextDisabled("Depth 0 | 0k nodes | 0.00s")
-local statusLabel = engineCard:TextDisabled("Status: off")
-
--- Right Column (Timing)
-local timingCard = right:GroupCard()
-timingCard:SectionHeader("Timing")
-timingCard:Slider("Min delay", 0.1, 5, 0.6, function(v) config.MinDelay = v end)
-timingCard:Slider("Max delay", 0.1, 10, 2.4, function(v) config.MaxDelay = v end)
-
--- HUB TAB
-local hubLeft, hubRight = tabs.Hub:Column()
-local infoCard = hubLeft:GroupCard()
-infoCard:SectionHeader("Info")
-infoCard:Text("Executor: " .. (identifyexecutor and identifyexecutor() or "Unknown"))
-infoCard:Text("Menu key: Right Shift")
-infoCard:Text("Discord: https://discord.gg/UBeRG8Qp2f")
-infoCard:Text("Bunni is untested. Continue anyway.")
-
-infoCard:Button("Unload", function()
-    if board then board:setArrow("best", nil) end
-    gui:Destroy()
-end)
-
--- SETTINGS TAB
-local setLeft, setRight = tabs.Settings:Column()
-
--- Left Column
-local appearanceCard = setLeft:GroupCard()
-appearanceCard:SectionHeader("Appearance")
-appearanceCard:Combo("Theme", {"default", "Dark", "Light"}, 1, function(val) end)
-appearanceCard:Checkbox("Rainbow top bar", false, function(v) end)
-appearanceCard:Combo("Language", {"English", "Spanish", "Russian"}, 1, function(val) end)
-appearanceCard:Slider("UI scale", 0.5, 1.5, 1, function(v) end)
-appearanceCard:Checkbox("Animations", true, function(v) end)
-
-local interfaceCard = setLeft:GroupCard()
-interfaceCard:SectionHeader("Interface")
-interfaceCard:Checkbox("Keep on screen", true, function(v) end)
-interfaceCard:TextDisabled("The menu can't be dragged off the edge")
-interfaceCard:Checkbox("Lock position", false, function(v) end)
-interfaceCard:Checkbox("Notifications", true, function(v) end)
-interfaceCard:Checkbox("Info bar", true, function(v) end)
-interfaceCard:Button("Center window", function() end)
+local statLabel = left:TextDisabled("Depth 0 | 0k nodes | 0.00s")
+local statusLabel = left:TextDisabled("Status: off")
 
 -- Right Column
-local menuCard = setRight:GroupCard()
-menuCard:SectionHeader("Menu")
-menuCard:Keybind("Menu key", Enum.KeyCode.RightShift, nil, function(k) end)
-menuCard:Button("Unload", function() gui:Destroy() end)
+local right = cols[2]
+right:Section("Timing")
+right:Slider("Min delay", 0.1, 5, 0.6, function(v) config.MinDelay = v end)
+right:Slider("Max delay", 0.1, 10, 2.4, function(v) config.MaxDelay = v end)
 
-local configCard = setRight:GroupCard()
-configCard:SectionHeader("Configurations")
-configCard:TextBox("Name", "", function(t) end, "config name")
-configCard:Combo("Saved", {"None", "Legit", "Rage"}, 1, function(val) end)
+-- ==========================================
+-- HUB TAB
+-- ==========================================
+local hubCols = tabs.Hub:Columns(2)
+local hubLeft = hubCols[1]
+hubLeft:Section("Info")
+hubLeft:Text("Executor: " .. (identifyexecutor and identifyexecutor() or "Unknown"))
+hubLeft:Text("Menu key: Right Shift")
+hubLeft:Text("Discord: https://discord.gg/UBeRG8Qp2f")
+hubLeft:Text("Bunni is untested. Continue anyway.")
+hubLeft:Button("Unload", function()
+    if board then board:setArrow("best", nil) end
+    win:Destroy()
+end)
 
-configCard:ButtonRow({
-    { text = "Save", callback = function() end },
-    { text = "Load", callback = function() end },
-    { text = "Delete", callback = function() end },
-    { text = "Refresh", callback = function() end }
+-- ==========================================
+-- SETTINGS TAB
+-- ==========================================
+local setCols = tabs.Settings:Columns(2)
+
+-- Left Column
+local setLeft = setCols[1]
+setLeft:Section("Appearance")
+setLeft:Dropdown("Theme", {"default", "Dark", "Light"}, 1, function(val) end)
+setLeft:Checkbox("Rainbow top bar", false, function(v) end)
+setLeft:Dropdown("Language", {"English", "Spanish", "Russian"}, 1, function(val) end)
+setLeft:Slider("UI scale", 0.5, 1.5, 1, function(v) end)
+setLeft:Checkbox("Animations", true, function(v) end)
+
+setLeft:Section("Interface")
+setLeft:Checkbox("Keep on screen", true, function(v) end)
+setLeft:SubText("The menu can't be dragged off the edge", 0)
+setLeft:Checkbox("Lock position", false, function(v) end)
+setLeft:Checkbox("Notifications", true, function(v) end)
+setLeft:Checkbox("Info bar", true, function(v) end)
+setLeft:Button("Center window", function() end)
+
+-- Right Column
+local setRight = setCols[2]
+setRight:Section("Menu")
+setRight:Keybind("Menu key", Enum.KeyCode.RightShift, nil, function(k) end)
+setRight:Button("Unload", function() win:Destroy() end)
+
+setRight:Section("Configurations")
+setRight:InputText("Name", "", function(t) end, "config name")
+setRight:Dropdown("Saved", {"None"}, 1, function(val) end)
+setRight:ButtonGroup(2, {
+    {"Save", function() end},
+    {"Load", function() end},
+    {"Delete", function() end},
+    {"Refresh", function() end}
 })
 
-local aboutCard = setRight:GroupCard()
-aboutCard:SectionHeader("About")
-aboutCard:Text("Status")
-aboutCard:TextDisabled("Hub is working.")
-aboutCard:Text("Noic Hub")
-aboutCard:Text("Executor: Bunni")
-aboutCard:Button("Join our Discord", function() end)
+setRight:Section("About")
+setRight:Text("Status")
+setRight:SubText("Hub is working.", 0)
+setRight:Text("Noic Hub")
+setRight:Text("Executor: Bunni")
+setRight:Button("Join our Discord", function() end)
+
+-- Info bar at the very bottom
+win:InfoBar("v1.0.0 | Executor: Bunni", "FPS: 60 | Ping: 30ms")
 
 -- 5. Main Logic Loop
 local RunService = game:GetService("RunService")
@@ -183,7 +188,6 @@ RunService.RenderStepped:Connect(function()
         return 
     end
 
-    -- Check whose turn it is
     local engine = session:engineAt(#session.ucis)
     local isMyTurn = (session.myColor == 1 and engine.side == 1) or 
                      (session.myColor == -1 and engine.side == -1)
@@ -196,7 +200,6 @@ RunService.RenderStepped:Connect(function()
 
     stats.Status = "thinking..."
 
-    -- Run engine
     local currentFen = engine:getFen()
     if lastFen ~= currentFen then
         lastFen = currentFen
@@ -219,14 +222,12 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Draw hints
     if config.HintsEnabled and currentBestMove and board then
         local fromSquare = Engine.algToIndex64((string.sub(currentBestMove, 1, 2)))
         local toSquare = Engine.algToIndex64((string.sub(currentBestMove, 3, 4)))
         board:setArrow("best", fromSquare, toSquare, Color3.fromRGB(46, 196, 182), 0.2)
     end
 
-    -- Autoplay
     if config.AutoplayEnabled and targetMove then
         if os.clock() >= moveDelay then
             stats.Status = "playing..."
