@@ -5,19 +5,19 @@ local libCode = game:HttpGet(ImGuiURL)
 -- Strip HTML if GitHub served a webpage
 libCode = string.gsub(libCode, "<[^>]*>", "")
 
--- Compile the code
+-- Force the library to return the table at the very end, no matter what
+libCode = libCode .. "\n\nreturn ImGui"
+
 local libFunc, err = loadstring(libCode)
-if not libFunc then
-    error("Failed to compile ImGui: " .. tostring(err))
-end
-
--- Execute the code and capture the returned table
-local success, returnedImGui = pcall(libFunc)
-
-if success and returnedImGui then
-    ImGui = returnedImGui -- Assign it globally so the rest of the script can use it
+if libFunc then
+    local success, returnedImGui = pcall(libFunc)
+    if success and returnedImGui then
+        ImGui = returnedImGui 
+    else
+        error("ImGui module failed to execute: " .. tostring(returnedImGui))
+    end
 else
-    error("ImGui module failed to return a table: " .. tostring(returnedImGui))
+    error("Failed to compile ImGui: " .. tostring(err))
 end
 
 local Players = game:GetService("Players")
