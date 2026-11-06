@@ -478,6 +478,159 @@ function Container:Tabs(names)
 	return result
 end
 
+------------------------------------------------------------------ KEYBIND
+local KEY_SHORT = {
+	RightShift = "RSHIFT", LeftShift = "LSHIFT",
+	RightControl = "RCTRL", LeftControl = "LCTRL",
+	RightAlt = "RALT", LeftAlt = "LALT",
+	Return = "ENTER", Backspace = "BKSP", Escape = "ESC",
+	Insert = "INS", Delete = "DEL", PageUp = "PGUP", PageDown = "PGDN",
+	CapsLock = "CAPS", Space = "SPACE",
+}
+
+local function keyName(key)
+	if not key then return "NONE" end
+	return KEY_SHORT[key.Name] or string.upper(key.Name)
+end
+
+-- callback(key)        -> fires when the bound key is pressed
+-- onChanged(key)       -> fires when the user rebinds (key is nil when cleared)
+function Container:Keybind(label, default, callback, onChanged)
+	local key = default
+	local listening = false
+
+	local r = row(self)
+	local btn = make("TextButton", {
+		Text = "",
+		Size = UDim2.fromScale(1, 1),
+		AutoButtonColor = false,
+	}, r)
+
+	make("TextLabel", {
+		Text = label,
+		Size = UDim2.new(1, -90, 1, 0),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, btn)
+
+	local val = make("TextLabel", {
+		Size = UDim2.new(0, 90, 1, 0),
+		Position = UDim2.new(1, -90, 0, 0),
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}, btn)
+
+	local hovered = false
+	local function render()
+		if listening then
+			val.Text = "[...]"
+			val.TextColor3 = Theme.CheckMark
+		else
+			val.Text = "[" .. keyName(key) .. "]"
+			val.TextColor3 = hovered and Theme.Text or Theme.TextDisabled
+		end
+	end
+	render()
+
+	btn.MouseEnter:Connect(function() hovered = true render() end)
+	btn.MouseLeave:Connect(function() hovered = false render() end)
+	btn.MouseButton1Click:Connect(function()
+		listening = true
+		render()
+	end)
+
+	local h = {}
+	function h:Set(k, silent)
+		key = k
+		listening = false
+		render()
+		if onChanged and not silent then onChanged(key) end
+	end
+	function h:Get() return key end
+	function h:IsDown() return key ~= nil and UIS:IsKeyDown(key) end
+
+	local conn = UIS.InputBegan:Connect(function(i, processed)
+		if i.UserInputType ~= Enum.UserInputType.Keyboard then return end
+
+		if listening then
+			-- Escape / Backspace clear the bind
+			if i.KeyCode == Enum.KeyCode.Escape or i.KeyCode == Enum.KeyCode.Backspace then
+				h:Set(nil)
+			else
+				h:Set(i.KeyCode)
+			end
+			return
+		end
+
+		if not processed and key and i.KeyCode == key and callback then
+			callback(key)
+		end
+	end)
+	r.Destroying:Connect(function() conn:Disconnect() end)
+
+	return h
+end
+
+------------------------------------------------------------------ TEXTBOX (label on top)
+-- opts: { Live = true } fires callback on every keystroke instead of on focus lost
+function Container:TextBox(label, default, callback, placeholder, opts)
+	opts = opts or {}
+
+	local holder = make("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = self:_order(),
+	}, self.Frame)
+	make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) }, holder)
+
+	if label and label ~= "" then
+		make("TextLabel", {
+			Text = label,
+			Size = UDim2.new(1, 0, 0, 16),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			LayoutOrder = 1,
+		}, holder)
+	end
+
+	local frame = make("Frame", {
+		Size = UDim2.new(1, 0, 0, ITEM_H),
+		LayoutOrder = 2,
+	}, holder)
+	paint(frame, Theme.FrameBg)
+
+	local box = make("TextBox", {
+		Text = default or "",
+		PlaceholderText = placeholder or "",
+		PlaceholderColor3 = Theme.TextDisabled,
+		Size = UDim2.new(1, -8, 1, 0),
+		Position = UDim2.fromOffset(4, 0),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ClearTextOnFocus = false,
+		ClipsDescendants = true,
+	}, frame)
+
+	local focused = false
+	box.MouseEnter:Connect(function() if not focused then paint(frame, Theme.FrameBgHovered) end end)
+	box.MouseLeave:Connect(function() if not focused then paint(frame, Theme.FrameBg) end end)
+	box.Focused:Connect(function() focused = true paint(frame, Theme.FrameBgActive) end)
+	box.FocusLost:Connect(function(enter)
+		focused = false
+		paint(frame, Theme.FrameBg)
+		if not opts.Live and callback then callback(box.Text, enter) end
+	end)
+	if opts.Live then
+		box:GetPropertyChangedSignal("Text"):Connect(function()
+			if callback then callback(box.Text) end
+		end)
+	end
+
+	return {
+		Set = function(_, t) box.Text = t end,
+		Get = function() return box.Text end,
+		Instance = box,
+	}
+end
+
 local gui
 local zCounter = 1
 
