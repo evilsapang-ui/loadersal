@@ -171,14 +171,12 @@ end)
 
 -- Main Loop
 RunService.RenderStepped:Connect(function()
-    -- BHOP Logic
+    -- BHOP Spam Logic
     if config.BhopEnabled and holdingSpace then
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
-            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            -- Only jump if on ground
-            if hum:GetState() == Enum.HumanoidStateType.Landed or hum:GetState() == Enum.HumanoidStateType.Running or hum:GetState() == Enum.HumanoidStateType.RunningNoPhysics then
-                hum.Jump = true
-            end
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChildOfClass("Humanoid") then
+            -- Spams jump every frame, forcing the Humanoid to jump the millisecond it lands
+            char:FindFirstChildOfClass("Humanoid").Jump = true
         end
     end
 
