@@ -1,9 +1,9 @@
 local KontraID = 87204735676240
 
 local URLs = {
-    ImGui = "https://raw.githubusercontent.com/yourname/repo/main/imgui.lua",
-    Kontra = "https://raw.githubusercontent.com/yourname/repo/main/kontra.lua",
-    Universal = "https://raw.githubusercontent.com/yourname/repo/main/universal.lua"
+    ImGui = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/imgui.lua",
+    Kontra = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/refs/heads/main/kontra.lua",
+    Universal = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/universal.lua"
 }
 
 local function loadScript(url)
