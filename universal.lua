@@ -1,5 +1,5 @@
 -- 1. Load ImGui Module
-local ImGuiURL = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/imgui.lua"
+local ImGuiURL = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/imgui.lua?t=" .. tostring(os.time())
 local libCode = game:HttpGet(ImGuiURL)
 
 -- Compile the code
