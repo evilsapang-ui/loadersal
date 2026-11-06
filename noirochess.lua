@@ -16,12 +16,20 @@ end
 
 -- 2. Game Hooks
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Engine = require(ReplicatedStorage.Chess.Engine)
-local Bot = require(ReplicatedStorage.Chess.Bot)
+local ChessFolder = ReplicatedStorage:WaitForChild("Chess", 10)
+if not ChessFolder then
+    return warn("[NoiRoChess] Could not find Chess folder. Are you in a RoChess game?")
+end
+
+local Engine = require(ChessFolder.Engine)
+local Bot = require(ChessFolder.Bot)
+local Remotes = ChessFolder:WaitForChild("Remotes")
+local MakeMove = Remotes:WaitForChild("MakeMove") -- If this doesn't work, try SubmitMove
 
 local enabled = true
 local currentBestMove = nil
 
+-- Find the game controller (to get the board and session)
 local controller = nil
 for _, mod in pairs(getloadedmodules()) do
     if mod.Name == "App" or mod.Name == "Main" or mod.Name == "Client" then
@@ -38,13 +46,6 @@ if not controller then
 end
 
 local board = controller.board
-local originalSetArrow = board.setArrow
-
-board.setArrow = function(self, name, from, to, color, thickness)
-    if originalSetArrow then
-        originalSetArrow(self, name, from, to, color, thickness)
-    end
-end
 
 -- 3. Configuration State
 local config = {
@@ -110,6 +111,7 @@ tabs.Settings:Slider("Max delay", 0.1, 10, 2.4, function(v) config.MaxDelay = v 
 local RunService = game:GetService("RunService")
 local moveDelay = 0
 local targetMove = nil
+local lastFen = ""
 
 RunService.RenderStepped:Connect(function()
     if not enabled then return end
@@ -127,17 +129,20 @@ RunService.RenderStepped:Connect(function()
     
     if not isMyTurn then 
         stats.Status = "waiting for opponent"
+        if config.HintsEnabled and board then board:setArrow("best", nil) end
         return 
     end
 
     stats.Status = "thinking..."
 
-    -- Run engine
-    local fen = session.startFen or Engine.START_FEN
-    local startTime = os.clock()
-    
-    -- If we don't already have a locked move for this turn, calculate one
-    if not targetMove then
+    -- Run engine if we haven't already calculated for this position
+    local currentFen = engine:getFen()
+    if lastFen ~= currentFen then
+        lastFen = currentFen
+        targetMove = nil
+        
+        local fen = session.startFen or Engine.START_FEN
+        local startTime = os.clock()
         local moveUci, info = Bot.think(fen, session.ucis, {rating = 3000, depth = config.DepthLimit, time = config.ThinkTime})
         
         if moveUci then
@@ -145,15 +150,8 @@ RunService.RenderStepped:Connect(function()
             stats.Nodes = info and info.nodes or 0
             stats.Time = os.clock() - startTime
 
-            local fromSquare = Engine.algToIndex64((string.sub(moveUci, 1, 2)))
-            local toSquare = Engine.algToIndex64((string.sub(moveUci, 3, 4)))
-
-            if config.HintsEnabled then
-                board:setArrow("best", fromSquare, toSquare, Color3.fromRGB(46, 196, 182), 0.2)
-            else
-                board:setArrow("best", nil)
-            end
-
+            currentBestMove = moveUci
+            
             if config.AutoplayEnabled then
                 targetMove = moveUci
                 moveDelay = os.clock() + math.random(config.MinDelay * 100, config.MaxDelay * 100) / 100
@@ -161,18 +159,30 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Handle autoplay delay
+    -- Draw hints continuously
+    if config.HintsEnabled and currentBestMove then
+        local fromSquare = Engine.algToIndex64((string.sub(currentBestMove, 1, 2)))
+        local toSquare = Engine.algToIndex64((string.sub(currentBestMove, 3, 4)))
+        board:setArrow("best", fromSquare, toSquare, Color3.fromRGB(46, 196, 182), 0.2)
+    end
+
+    -- Handle autoplay
     if config.AutoplayEnabled and targetMove then
         if os.clock() >= moveDelay then
             stats.Status = "playing..."
-            session:applyUci(targetMove)
+            
+            -- Fire the remote instead of just updating the local UI
+            pcall(function()
+                MakeMove:FireServer(targetMove)
+            end)
+            
             targetMove = nil
-            if config.HintsEnabled then board:setArrow("best", nil) end
+            if config.HintsEnabled and board then board:setArrow("best", nil) end
         end
     end
 end)
 
--- 6. UI Updater (Runs every 0.1s to keep the stats text accurate)
+-- 6. UI Updater
 task.spawn(function()
     while task.wait(0.1) do
         if statLabel then
