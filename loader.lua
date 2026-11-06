@@ -1,32 +1,29 @@
--- Universal Loader
 local KontraID = 87204735676240
 
--- REPLACE THESE URLS WITH YOUR RAW GITHUB LINKS
 local URLs = {
+    ImGui = "https://raw.githubusercontent.com/yourname/repo/main/imgui.lua",
     Kontra = "https://raw.githubusercontent.com/yourname/repo/main/kontra.lua",
     Universal = "https://raw.githubusercontent.com/yourname/repo/main/universal.lua"
 }
 
-local function load(url)
-    local success, code = pcall(function()
-        return game:HttpGet(url)
-    end)
+local function loadScript(url)
+    local success, code = pcall(game.HttpGet, game, url)
     if success and code then
         local func, err = loadstring(code)
         if func then
             func()
         else
-            warn("Syntax error in loaded script: " .. tostring(err))
+            warn("Syntax error: " .. tostring(err))
         end
     else
-        warn("Failed to download script from: " .. url)
+        warn("Failed to download: " .. url)
     end
 end
 
 if game.PlaceId == KontraID then
-    print("[Loader] Kontra detected. Loading Kontra modules...")
-    load(URLs.Kontra)
+    print("[Loader] Kontra detected. Loading modules...")
+    loadScript(URLs.Kontra)
 else
-    print("[Loader] Universal game detected. Loading Universal modules...")
-    load(URLs.Universal)
+    print("[Loader] Universal game detected. Loading modules...")
+    loadScript(URLs.Universal)
 end
