@@ -6,7 +6,7 @@ local URLs = {
     ImGui = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/imgui.lua" .. timestamp,
     Kontra = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/kontra.lua" .. timestamp,
     Universal = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/universal.lua" .. timestamp,
-    NoiRoChess = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/noirochess.lua" .. timestamp
+    NoiRoChess = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/noirochess_v2.lua" .. timestamp
 }
 
 local function loadScript(url)
