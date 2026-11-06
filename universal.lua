@@ -2,22 +2,17 @@
 local ImGuiURL = "https://raw.githubusercontent.com/evilsapang-ui/loadersal/main/imgui.lua?t=" .. tostring(os.time())
 local libCode = game:HttpGet(ImGuiURL)
 
--- Compile the code
 local libFunc, err = loadstring(libCode)
 if not libFunc then
     error("Failed to compile ImGui: " .. tostring(err))
 end
 
--- Execute the code and capture the returned table
 local success, returnedImGui = pcall(libFunc)
-
 if success and returnedImGui then
     ImGui = returnedImGui
 else
     error("ImGui module failed to return a table: " .. tostring(returnedImGui))
 end
-
--- (Keep the ImGui library loader exactly the same)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -29,18 +24,21 @@ local Camera = workspace.CurrentCamera
 ImGui.Init({ ToggleKey = Enum.KeyCode.RightShift })
 local win = ImGui.Window("Universal Hub", { Position = UDim2.fromOffset(100, 100), Width = 280 })
 
-local tabs = win:Tabs({"Aimbot", "Visuals", "Settings"})
+local tabs = win:Tabs({"Aimbot", "Visuals", "Movement", "Settings"})
 
 local config = {
     AimbotEnabled = false,
     Fov = 200,
     Smoothness = 0.9,
     TargetPart = "Head",
+    
     EspEnabled = true,
-    EspColor = Color3.fromRGB(255, 0, 0)
+    EspColor = Color3.fromRGB(255, 0, 0),
+
+    BhopEnabled = false
 }
 
-local activeHighlights = {} -- Moved up for the toggle callback
+local activeHighlights = {}
 
 -- AIMBOT TAB
 tabs.Aimbot:Checkbox("Enable Aimbot", false, function(v) config.AimbotEnabled = v end)
@@ -60,6 +58,13 @@ tabs.Visuals:Checkbox("Enable ESP", true, function(v)
     end
 end)
 
+-- MOVEMENT TAB (BHOP)
+tabs.Movement:Checkbox("Enable Auto-Bhop", false, function(v)
+    config.BhopEnabled = v
+end)
+tabs.Movement:Separator()
+tabs.Movement:Text("Hold Space to bhop.")
+
 -- SETTINGS TAB (THEMES)
 local themeNames = {"Blue", "Red", "Green", "Maroon", "Purple"}
 tabs.Settings:Combo("UI Theme", themeNames, 1, function(val, idx)
@@ -71,11 +76,16 @@ end)
 ---------------------------------------------------------
 local isAiming = false
 local lockedTarget = nil
+local holdingSpace = false
 
--- (Rest of your Aimbot and ESP Logic stays exactly the same)
-UserInputService.InputBegan:Connect(function(input)
+-- Input Trackers
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
     if input.UserInputType == Enum.UserInputType.MouseButton2 and config.AimbotEnabled then
         isAiming = true
+    end
+    if input.KeyCode == Enum.KeyCode.Space then
+        holdingSpace = true
     end
 end)
 
@@ -84,8 +94,12 @@ UserInputService.InputEnded:Connect(function(input)
         isAiming = false
         lockedTarget = nil
     end
+    if input.KeyCode == Enum.KeyCode.Space then
+        holdingSpace = false
+    end
 end)
 
+-- Aimbot Target
 local function getTarget()
     local target = nil
     local shortestDistance = math.huge
@@ -111,6 +125,7 @@ local function getTarget()
     return target
 end
 
+-- ESP Logic
 local function addHighlight(character)
     if not character or not character.Parent then return end
     if activeHighlights[character] then return end
@@ -154,7 +169,20 @@ task.spawn(function()
     end
 end)
 
+-- Main Loop
 RunService.RenderStepped:Connect(function()
+    -- BHOP Logic
+    if config.BhopEnabled and holdingSpace then
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            -- Only jump if on ground
+            if hum:GetState() == Enum.HumanoidStateType.Landed or hum:GetState() == Enum.HumanoidStateType.Running or hum:GetState() == Enum.HumanoidStateType.RunningNoPhysics then
+                hum.Jump = true
+            end
+        end
+    end
+
+    -- Aimbot Logic
     if isAiming and config.AimbotEnabled then
         if not lockedTarget or not lockedTarget.Parent or not lockedTarget.Parent:FindFirstChild("Humanoid") or lockedTarget.Parent.Humanoid.Health <= 0 then
             lockedTarget = getTarget()
