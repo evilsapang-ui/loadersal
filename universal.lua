@@ -19,6 +19,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 -- Initialize UI
 ImGui.Init({ ToggleKey = Enum.KeyCode.RightShift })
@@ -76,16 +77,12 @@ end)
 ---------------------------------------------------------
 local isAiming = false
 local lockedTarget = nil
-local holdingSpace = false
 
--- Input Trackers
+-- Input Trackers (We only track RMB now, because Space is handled by the spammer)
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.UserInputType == Enum.UserInputType.MouseButton2 and config.AimbotEnabled then
         isAiming = true
-    end
-    if input.KeyCode == Enum.KeyCode.Space then
-        holdingSpace = true
     end
 end)
 
@@ -93,9 +90,6 @@ UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
         isAiming = false
         lockedTarget = nil
-    end
-    if input.KeyCode == Enum.KeyCode.Space then
-        holdingSpace = false
     end
 end)
 
@@ -169,17 +163,20 @@ task.spawn(function()
     end
 end)
 
--- Main Loop
-RunService.RenderStepped:Connect(function()
-    -- BHOP Spam Logic
-    if config.BhopEnabled and holdingSpace then
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChildOfClass("Humanoid") then
-            -- Spams jump every frame, forcing the Humanoid to jump the millisecond it lands
-            char:FindFirstChildOfClass("Humanoid").Jump = true
+-- BHOP Spammer Thread
+task.spawn(function()
+    while task.wait() do
+        if config.BhopEnabled and UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            -- Spam the actual spacebar via VirtualInputManager
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+            task.wait(0.02) -- 50ms delay (approx 20 CPS)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
         end
     end
+end)
 
+-- Main Loop
+RunService.RenderStepped:Connect(function()
     -- Aimbot Logic
     if isAiming and config.AimbotEnabled then
         if not lockedTarget or not lockedTarget.Parent or not lockedTarget.Parent:FindFirstChild("Humanoid") or lockedTarget.Parent.Humanoid.Health <= 0 then
