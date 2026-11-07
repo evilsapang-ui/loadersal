@@ -44,7 +44,7 @@ end
 local function make(class, props, parent)
 	local inst = Instance.new(class)
 	
-	if class ~= "UIStroke" and class ~= "UIPadding" and class ~= "UIListLayout" then
+	if inst:IsA("GuiObject") then
 		inst.BorderSizePixel = 0
 	end
 	
