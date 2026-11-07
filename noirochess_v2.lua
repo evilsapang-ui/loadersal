@@ -69,18 +69,10 @@ local stats = {
 ImGui.Init({ ToggleKey = Enum.KeyCode.RightShift })
 local win = ImGui.Window("RoChess Noic hub", { Position = UDim2.fromOffset(100, 100), Width = 650 })
 
--- Top status badge
-local statusBadge = win:TextColored("working", Color3.fromRGB(150, 255, 150))
-statusBadge.Instance.TextSize = 12
-statusBadge.Instance.TextXAlignment = Enum.TextXAlignment.Center
-statusBadge.Instance.TextWrapped = false
-statusBadge.Instance.Size = UDim2.new(0, 60, 0, 16)
-statusBadge.Instance.Position = UDim2.new(0, 110, 0, 2)
-statusBadge.Instance.BackgroundTransparency = 1
-statusBadge.Instance.Parent.BackgroundColor3 = Color3.fromRGB(30, 50, 30)
-statusBadge.Instance.Parent.Size = UDim2.new(0, 60, 0, 16)
-statusBadge.Instance.Parent.Position = UDim2.new(0, 110, 0, 2)
+-- Fixed status badge (Only changes the text label, not the parent window)
+win:TextColored("working", Color3.fromRGB(150, 255, 150))
 
+-- Use SidebarTabs
 local tabs = win:SidebarTabs({"Play", "Hub", "Settings"}, 90)
 
 -- ==========================================
