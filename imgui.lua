@@ -1068,6 +1068,9 @@ ImGui.Themes = {
 	Green  = { Accent = C(66,250,110), Dark = C(41,122,62),  Active = C(15,250,70),  Grab = C(61,224,98),  Window = C(12,17,13), Border = C(110,128,114), Plot = C(255,230,0) },
 	Maroon = { Accent = C(176,48,64),  Dark = C(88,20,32),   Active = C(210,40,60),  Grab = C(150,36,52),  Window = C(18,10,12), Border = C(120,90,96),   Plot = C(230,150,60) },
 	Purple = { Accent = C(160,90,250), Dark = C(80,45,122),  Active = C(140,40,250), Grab = C(140,75,224), Window = C(14,12,18), Border = C(114,110,128), Plot = C(255,200,0) },
+	Pink   = { Accent = C(250,100,170), Dark = C(122,41,84), Active = C(250,40,140), Grab = C(224,85,155), Window = C(18,11,15), Border = C(128,105,115), Plot = C(255,210,90) },
+	Mint   = { Accent = C(80,230,180),  Dark = C(30,110,90), Active = C(20,230,160), Grab = C(70,205,160), Window = C(11,17,15), Border = C(105,128,120), Plot = C(255,225,100) },
+	Navy   = { Accent = C(60,100,200),  Dark = C(20,35,90),  Active = C(40,80,230),  Grab = C(50,90,190),  Window = C(10,13,24), Border = C(90,100,130),  Plot = C(230,190,60) },
 }
 
 local currentPalette = ImGui.Themes.Blue
