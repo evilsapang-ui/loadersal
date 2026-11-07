@@ -43,8 +43,6 @@ end
 local Engine = require(ChessFolder.Engine)
 local Bot = require(ChessFolder.Bot)
 
-local currentBestMove = nil
-
 local controller = nil
 for _, mod in pairs(getloadedmodules()) do
     if mod.Name == "App" or mod.Name == "Main" or mod.Name == "Client" then
@@ -59,8 +57,6 @@ end
 if not controller then
     return warn("[NoiRoc] Could not find the game controller. Make sure you are in an active game.")
 end
-
-local board = controller.board
 
 -- 4. State
 local config = {
@@ -82,6 +78,59 @@ local running = true
 local loading = false
 local connections = {}
 local fps = 60
+
+-- Hint arrow helpers. The board is read from the controller every time,
+-- because the game can build a new board for each game.
+local HINT_COLOR = Color3.fromRGB(46, 196, 182)
+local drawn = { board = nil, key = nil, at = 0 }
+
+local function clearHint()
+    if drawn.board then
+        local b = drawn.board
+        pcall(function() b:setArrow("best", nil) end)
+    end
+    drawn.board, drawn.key = nil, nil
+end
+
+local function setHint(move, now)
+    local b = controller.board
+    if not b then return end
+    if drawn.board and drawn.board ~= b then clearHint() end
+    -- only redraw when the move changed (or every 0.5s in case the game wiped the arrow)
+    if drawn.key == move and drawn.board == b and now - drawn.at < 0.5 then return end
+    local from = Engine.algToIndex64(string.sub(move, 1, 2))
+    local to = Engine.algToIndex64(string.sub(move, 3, 4))
+    local ok = pcall(function() b:setArrow("best", from, to, HINT_COLOR, 0.2) end)
+    if ok then drawn.board, drawn.key, drawn.at = b, move, now end
+end
+
+-- Debug helper: prints every function name the game exposes on the controller, session and board.
+-- Used to find how a live game submits a move (see the Hub tab button).
+local function dumpApi()
+    local function names(t, label)
+        local out, seen = {}, {}
+        local function collect(tbl)
+            for k, v in pairs(tbl) do
+                if type(v) == "function" and not seen[k] then
+                    seen[k] = true
+                    table.insert(out, tostring(k))
+                end
+            end
+        end
+        collect(t)
+        local mt = getmetatable(t)
+        if mt and type(mt.__index) == "table" then collect(mt.__index) end
+        table.sort(out)
+        print("[NoiRoc] " .. label .. ": " .. table.concat(out, ", "))
+    end
+    names(controller, "controller")
+    local session = controller.session
+    if session then
+        print("[NoiRoc] session.kind = " .. tostring(session.kind) .. ", myColor = " .. tostring(session.myColor))
+        names(session, "session")
+    end
+    if controller.board then names(controller.board, "board") end
+end
 
 -- 5. Languages
 local LANG = {
@@ -247,7 +296,7 @@ left:SubText("Use with caution. Using max settings on a rookie account may get y
 
 reg("Hints", "bool", left:Checkbox("Hints (Board ESP)", false, function(v)
     config.HintsEnabled = v
-    if not v and board then board:setArrow("best", nil) end
+    if not v then clearHint() end
     notify(tr(v and "Hints enabled" or "Hints disabled"))
 end))
 left:SubText("Shows the move on the board.")
@@ -273,11 +322,12 @@ hubLeft:Text("Executor: " .. executorName)
 local hubKeyText = hubLeft:Text("Menu key: RightShift")
 hubLeft:Text("Discord: https://discord.gg/UBeRG8Qp2f")
 hubLeft:Text(executorName .. " is untested. Continue anyway.")
+hubLeft:Button("Print game API (debug)", dumpApi)
 
 local function unload()
     running = false
     for _, c in ipairs(connections) do pcall(function() c:Disconnect() end) end
-    if board then pcall(function() board:setArrow("best", nil) end) end
+    clearHint()
     if screenGui then screenGui:Destroy() end
 end
 hubLeft:Button("Unload", unload)
@@ -543,9 +593,6 @@ refreshMenuText()
 notify("NoiRoc " .. "loaded")
 
 -- 7. Main Logic Loop
-local moveDelay = 0
-local targetMove = nil
-local lastFen = ""
 local hue = 0
 
 local function keepOnScreen()
@@ -561,6 +608,131 @@ local function keepOnScreen()
     end
 end
 
+-- One state table drives both hints and autoplay:
+--   best     = best move for the current position (nil until calculated)
+--   moveAt   = when autoplay is allowed to play it
+--   playedFen/playedAt = stops the same move being sent every frame (retries after 2s if it didn't go through)
+local S = {
+    session = nil, fen = nil, best = nil, thinking = false,
+    failedFen = nil, moveAt = nil, playedFen = nil, playedAt = 0,
+}
+
+local function resetState()
+    S.session, S.fen, S.best = nil, nil, nil
+    S.failedFen, S.moveAt, S.playedFen = nil, nil, nil
+end
+
+-- Runs the game's own search directly (Bot.Search) instead of Bot.think.
+-- The search yields every few ms (task.wait inside Search:checkTime), so it never freezes the game.
+-- Going direct also skips the opening-book dice roll and the Bot.onSearch hook that Bot.think fires.
+local function runSearch(session, fen)
+    local eng = Bot.buildEngine(session.startFen or Engine.START_FEN, table.clone(session.ucis))
+    if eng:status() ~= "ongoing" then return nil end -- finished game: nothing to search
+    local search = Bot.Search.new(eng)
+    -- the search checks this between slices, so an old search stops as soon as it's pointless
+    search.cancelled = function()
+        return not running or S.session ~= session or S.fen ~= fen
+    end
+    local t0 = os.clock()
+    local best, score, depth = search:run(config.DepthLimit, config.ThinkTime)
+    if not best or best == 0 then return nil end
+    return eng:moveToUci(best), {
+        score = score, depth = depth, nodes = search.nodes, time = os.clock() - t0,
+    }
+end
+
+local function startThink(session, fen)
+    S.thinking = true
+    task.spawn(function()
+        local ok, move, info = pcall(runSearch, session, fen)
+        S.thinking = false
+
+        if not running or S.session ~= session or S.fen ~= fen then return end -- position changed while thinking
+        if ok and move then
+            stats.Depth = info.depth or 0
+            stats.Nodes = info.nodes or 0
+            stats.Time = info.time or 0
+            S.best = move
+        else
+            if not ok then warn("[NoiRoc] search error: " .. tostring(move)) end
+            S.failedFen = fen -- don't retry the same position every frame
+        end
+    end)
+end
+
+local function stepChess()
+    local session = controller.session
+    if not session or session.kind == "analysis" then
+        stats.Status = "no game"
+        clearHint()
+        resetState()
+        return
+    end
+    if S.session ~= session then -- new game
+        clearHint()
+        resetState()
+        S.session = session
+    end
+
+    local engine = session:engineAt(#session.ucis)
+    local isMyTurn = session.myColor ~= nil and session.myColor == engine.side
+    if not isMyTurn then
+        stats.Status = "waiting..."
+        clearHint()
+        S.fen, S.best, S.moveAt = nil, nil, nil
+        return
+    end
+
+    local fen = engine:getFen()
+    if S.fen ~= fen then -- new position on my turn
+        S.fen, S.best, S.failedFen, S.moveAt = fen, nil, nil, nil
+        clearHint()
+    end
+
+    local now = os.clock()
+    local wantMove = config.HintsEnabled or config.AutoplayEnabled
+    if not wantMove then
+        stats.Status = "off"
+        clearHint()
+        return
+    end
+
+    -- calculate once per position, as soon as hints or autoplay is on
+    if S.best == nil and not S.thinking and S.failedFen ~= fen then
+        startThink(session, fen)
+    end
+    if S.thinking then stats.Status = "thinking..." end
+
+    -- hints
+    if config.HintsEnabled and S.best then
+        setHint(S.best, now)
+    else
+        clearHint()
+    end
+
+    -- autoplay
+    if config.AutoplayEnabled and S.best then
+        stats.Status = "playing..."
+        if S.playedFen == fen and now - S.playedAt < 2 then return end
+        if not S.moveAt then
+            local lo = math.floor(math.min(config.MinDelay, config.MaxDelay) * 100)
+            local hi = math.floor(math.max(config.MinDelay, config.MaxDelay) * 100)
+            S.moveAt = now + math.random(lo, hi) / 100
+        end
+        if now >= S.moveAt then
+            local ok, res = pcall(session.applyUci, session, S.best)
+            if (not ok or not res) and not S.applyWarned then
+                S.applyWarned = true
+                warn("[NoiRoc] applyUci returned " .. tostring(res) .. " for " .. tostring(S.best))
+            end
+            S.playedFen, S.playedAt, S.moveAt = fen, now, nil
+        end
+    else
+        S.moveAt = nil
+    end
+end
+
+local warned = false
 table.insert(connections, RunService.RenderStepped:Connect(function(dt)
     if not running then return end
 
@@ -573,61 +745,11 @@ table.insert(connections, RunService.RenderStepped:Connect(function(dt)
         win.TitleBar.BackgroundColor3 = Color3.fromHSV(hue, 0.8, 0.9)
     end
 
-    -- Chess logic
-    local session = controller.session
-    if not session or session.kind == "analysis" then
-        stats.Status = "no game"
-        return
-    end
-
-    local engine = session:engineAt(#session.ucis)
-    local isMyTurn = (session.myColor == 1 and engine.side == 1) or
-                     (session.myColor == -1 and engine.side == -1)
-
-    if not isMyTurn then
-        stats.Status = "waiting..."
-        if config.HintsEnabled and board then board:setArrow("best", nil) end
-        return
-    end
-
-    stats.Status = "thinking..."
-
-    local currentFen = engine:getFen()
-    if lastFen ~= currentFen then
-        lastFen = currentFen
-        targetMove = nil
-
-        local fen = session.startFen or Engine.START_FEN
-        local startTime = os.clock()
-        local moveUci, info = Bot.think(fen, session.ucis, {rating = 3000, depth = config.DepthLimit, time = config.ThinkTime})
-
-        if moveUci then
-            stats.Depth = info and info.depth or config.DepthLimit
-            stats.Nodes = info and info.nodes or 0
-            stats.Time = os.clock() - startTime
-            currentBestMove = moveUci
-
-            if config.AutoplayEnabled then
-                targetMove = moveUci
-                local lo = math.floor(math.min(config.MinDelay, config.MaxDelay) * 100)
-                local hi = math.floor(math.max(config.MinDelay, config.MaxDelay) * 100)
-                moveDelay = os.clock() + math.random(lo, hi) / 100
-            end
-        end
-    end
-
-    if config.HintsEnabled and currentBestMove and board then
-        local fromSquare = Engine.algToIndex64((string.sub(currentBestMove, 1, 2)))
-        local toSquare = Engine.algToIndex64((string.sub(currentBestMove, 3, 4)))
-        board:setArrow("best", fromSquare, toSquare, Color3.fromRGB(46, 196, 182), 0.2)
-    end
-
-    if config.AutoplayEnabled and targetMove then
-        if os.clock() >= moveDelay then
-            stats.Status = "playing..."
-            session:applyUci(targetMove)
-            targetMove = nil
-        end
+    -- Chess logic (a failure here must never kill the UI loop)
+    local ok, e = pcall(stepChess)
+    if not ok and not warned then
+        warned = true
+        warn("[NoiRoc] chess loop error: " .. tostring(e))
     end
 end))
 
