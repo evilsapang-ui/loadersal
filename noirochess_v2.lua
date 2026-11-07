@@ -687,6 +687,53 @@ local function startThink(session, fen)
     end)
 end
 
+-- session:applyUci only updates the LOCAL game record, so it must not be used in a live game.
+-- The real path is the callback the board fires when you drop a piece: board.onMove(from64, to64, promo, instant)
+-- (same argument order as controller.analysisMove in Analysis.lua). controller.onBoardMove is the fallback.
+local MOVE_FN_NAMES = {
+    { "board", "onMove" },
+    { "controller", "onBoardMove" },
+}
+
+local function findMoveFn()
+    local sources = { controller = controller, board = controller.board }
+    for _, entry in ipairs(MOVE_FN_NAMES) do
+        local holder = sources[entry[1]]
+        if holder then
+            local f = holder[entry[2]]
+            if type(f) == "function" then return f, entry[1] .. "." .. entry[2] end
+        end
+    end
+end
+
+local function submitMove(uci)
+    local f, label = findMoveFn()
+    if not f then
+        if not S.noMoveFnWarned then
+            S.noMoveFnWarned = true
+            warn("[NoiRoc] Autoplay can't find board.onMove or controller.onBoardMove.")
+            notify("Autoplay: move function not found")
+        end
+        return false
+    end
+    if S.usedMoveFn ~= label then
+        S.usedMoveFn = label
+        print("[NoiRoc] autoplay submits moves through " .. label)
+    end
+    local from = Engine.algToIndex64(string.sub(uci, 1, 2))
+    local to = Engine.algToIndex64(string.sub(uci, 3, 4))
+    local promo
+    local pc = string.sub(uci, 5, 5)
+    if pc ~= "" then
+        for i, c in ipairs(Engine.PIECE_CHARS) do
+            if c == pc then promo = i end
+        end
+    end
+    local ok, res = pcall(f, from, to, promo, true)
+    if not ok then warn("[NoiRoc] move function error: " .. tostring(res)) end
+    return ok
+end
+
 local function stepChess()
     local session = controller.session
     if not session or session.kind == "analysis" then
@@ -747,11 +794,7 @@ local function stepChess()
             S.moveAt = now + math.random(lo, hi) / 100
         end
         if now >= S.moveAt then
-            local ok, res = pcall(session.applyUci, session, S.best)
-            if (not ok or not res) and not S.applyWarned then
-                S.applyWarned = true
-                warn("[NoiRoc] applyUci returned " .. tostring(res) .. " for " .. tostring(S.best))
-            end
+            submitMove(S.best)
             S.playedFen, S.playedAt, S.moveAt = fen, now, nil
         end
     else
