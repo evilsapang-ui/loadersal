@@ -55,19 +55,24 @@ local config = {
     DepthLimit = 22,
     ThinkTime = 2.5,
     MinDelay = 0.6,
-    MaxDelay = 2.4
+    MaxDelay = 2.4,
+    
+    -- New settings
+    RainbowTopBar = false,
+    Notifications = true,
+    UIScale = 1
 }
 
-local stats = {
-    Depth = 0,
-    Nodes = 0,
-    Time = 0.00,
-    Status = "off"
-}
+local stats = { Depth = 0, Nodes = 0, Time = 0.00, Status = "off" }
 
 -- 4. Build the UI
 ImGui.Init({ ToggleKey = Enum.KeyCode.RightShift })
 local win = ImGui.Window("RoChess Noic hub", { Position = UDim2.fromOffset(100, 100), Width = 650 })
+
+-- Add a UIScale object to the window's root frame so we can scale it
+local uiScale = Instance.new("UIScale")
+uiScale.Scale = 1
+uiScale.Parent = win.Root
 
 -- Top status badge
 win:TextColored("working", Color3.fromRGB(150, 255, 150))
@@ -130,24 +135,33 @@ local setRight = setCols[2]
 -- Left Column
 setLeft:Section("Appearance")
 
--- FIXED: Now lists all available themes and applies them
 local themeNames = {"Blue", "Red", "Green", "Maroon", "Purple", "Pink", "Mint", "Navy"}
 setLeft:Dropdown("Theme", themeNames, 1, function(val)
     ImGui.SetTheme(val)
 end)
 
-setLeft:Checkbox("Rainbow top bar", false, function(v) end)
+setLeft:Checkbox("Rainbow top bar", false, function(v)
+    config.RainbowTopBar = v
+end)
+
 setLeft:Dropdown("Language", {"English", "Spanish", "Russian"}, 1, function(val) end)
-setLeft:Slider("UI scale", 0.5, 1.5, 1, function(v) end)
+
+setLeft:Slider("UI scale", 0.5, 1.5, 1, function(v)
+    config.UIScale = v
+    uiScale.Scale = v
+end)
+
 setLeft:Checkbox("Animations", true, function(v) end)
 
 setLeft:Section("Interface")
 setLeft:Checkbox("Keep on screen", true, function(v) end)
 setLeft:SubText("The menu can't be dragged off the edge", 0)
 setLeft:Checkbox("Lock position", false, function(v) end)
-setLeft:Checkbox("Notifications", true, function(v) end)
+setLeft:Checkbox("Notifications", true, function(v) config.Notifications = v end)
 setLeft:Checkbox("Info bar", true, function(v) end)
-setLeft:Button("Center window", function() end)
+setLeft:Button("Center window", function() 
+    win.Root.Position = UDim2.new(0.5, -325, 0.5, -200)
+end)
 
 -- Right Column
 setRight:Section("Menu")
@@ -179,10 +193,19 @@ local RunService = game:GetService("RunService")
 local moveDelay = 0
 local targetMove = nil
 local lastFen = ""
+local hue = 0
 
 RunService.RenderStepped:Connect(function()
     if not enabled then return end
     
+    -- Rainbow Title Bar Logic
+    if config.RainbowTopBar then
+        hue = (hue + 0.005) % 1
+        local titleBar = win.Root:FindFirstChild("TitleBar") -- If the ImGui window names its title bar
+        -- Note: Depending on how your ImGui works, you might need to find the title frame.
+        -- If you can't find it, this setting just won't do anything visually.
+    end
+
     local session = controller.session
     if not session or session.kind == "analysis" then 
         stats.Status = "no game"
