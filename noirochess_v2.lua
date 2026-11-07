@@ -14,11 +14,26 @@ else
     error("ImGui module failed to return a table: " .. tostring(returnedImGui))
 end
 
--- 2. Game Hooks
+-- 2. Dynamic Executor Detection
+local function getExecutor()
+    local success, name = pcall(function()
+        if identifyexecutor then return identifyexecutor() end
+        if getexecutorname then return getexecutorname() end
+        return "Unknown"
+    end)
+    if success and name then
+        -- Capitalize the first letter just in case
+        return string.upper(string.sub(name, 1, 1)) .. string.sub(name, 2)
+    end
+    return "Unknown"
+end
+local executorName = getExecutor()
+
+-- 3. Game Hooks
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ChessFolder = ReplicatedStorage:WaitForChild("Chess", 10)
 if not ChessFolder then
-    return warn("[NoiRoChess] Could not find Chess folder. Are you in a RoChess game?")
+    return warn("[NoiRocChess] Could not find Chess folder. Are you in a RoChess game?")
 end
 
 local Engine = require(ChessFolder.Engine)
@@ -39,7 +54,7 @@ for _, mod in pairs(getloadedmodules()) do
 end
 
 if not controller then
-    return warn("[NoiRoChess] Could not find the game controller. Make sure you are in an active game.")
+    return warn("[NoiRocChess] Could not find the game controller. Make sure you are in an active game.")
 end
 
 local board = controller.board
@@ -48,7 +63,7 @@ board.setArrow = function(self, name, from, to, color, thickness)
     if originalSetArrow then originalSetArrow(self, name, from, to, color, thickness) end
 end
 
--- 3. Configuration State
+-- 4. Configuration State
 local config = {
     AutoplayEnabled = false,
     HintsEnabled = false,
@@ -57,7 +72,6 @@ local config = {
     MinDelay = 0.6,
     MaxDelay = 2.4,
     
-    -- New settings
     RainbowTopBar = false,
     Notifications = true,
     UIScale = 1
@@ -65,19 +79,16 @@ local config = {
 
 local stats = { Depth = 0, Nodes = 0, Time = 0.00, Status = "off" }
 
--- 4. Build the UI
+-- 5. Build the UI
 ImGui.Init({ ToggleKey = Enum.KeyCode.RightShift })
-local win = ImGui.Window("RoChess Noic hub", { Position = UDim2.fromOffset(100, 100), Width = 650 })
+local win = ImGui.Window("RoChess NoiRoc Hub", { Position = UDim2.fromOffset(100, 100), Width = 650 })
 
--- Fixed UIScale: Applied directly to win.Root
 local uiScale = Instance.new("UIScale")
 uiScale.Scale = 1
 uiScale.Parent = win.Root
 
--- Top status badge
 win:TextColored("working", Color3.fromRGB(150, 255, 150))
 
--- Use SidebarTabs
 local tabs = win:SidebarTabs({"Play", "Hub", "Settings"}, 90)
 
 -- ==========================================
@@ -116,10 +127,10 @@ local hubCols = tabs.Hub:Columns(2)
 local hubLeft = hubCols[1]
 
 hubLeft:Section("Info")
-hubLeft:Text("Executor: " .. (identifyexecutor and identifyexecutor() or "Unknown"))
+hubLeft:Text("Executor: " .. executorName)
 hubLeft:Text("Menu key: Right Shift")
 hubLeft:Text("Discord: https://discord.gg/UBeRG8Qp2f")
-hubLeft:Text("Bunni is untested. Continue anyway.")
+hubLeft:Text(executorName .. " is untested. Continue anyway.")
 hubLeft:Button("Unload", function()
     if board then board:setArrow("best", nil) end
     win:Destroy()
@@ -182,14 +193,14 @@ setRight:ButtonGroup(2, {
 setRight:Section("About")
 setRight:Text("Status")
 setRight:SubText("Hub is working.", 0)
-setRight:Text("Noic Hub")
-setRight:Text("Executor: Bunni")
+setRight:Text("NoiRoc Hub")
+setRight:Text("Executor: " .. executorName)
 setRight:Button("Join our Discord", function() end)
 
 -- Info bar
-win:InfoBar("v1.0.0 | Executor: Bunni", "FPS: 60 | Ping: 30ms")
+win:InfoBar("v1.0.0 | Executor: " .. executorName, "FPS: 60 | Ping: 30ms")
 
--- 5. Main Logic Loop
+-- 6. Main Logic Loop
 local RunService = game:GetService("RunService")
 local moveDelay = 0
 local targetMove = nil
@@ -202,10 +213,8 @@ RunService.RenderStepped:Connect(function()
     -- Rainbow Title Bar Logic
     if config.RainbowTopBar then
         hue = (hue + 0.005) % 1
-        -- Find the title bar frame inside the window
         local titleBar = win.Root:FindFirstChild("TitleBar") 
         if not titleBar then
-            -- Fallback if it's not named TitleBar, usually it's the first child
             local firstChild = win.Root:GetChildren()[1]
             if firstChild and firstChild:IsA("Frame") and firstChild.Size.Y.Offset == 20 then
                 titleBar = firstChild
@@ -272,7 +281,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- 6. UI Updater
+-- 7. UI Updater
 task.spawn(function()
     while task.wait(0.1) do
         if statLabel then
