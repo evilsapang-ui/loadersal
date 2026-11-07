@@ -1033,7 +1033,7 @@ function ImGui.Window(title, opts)
 
 	local dragging, dragStart, startPos
 	titleBar.InputBegan:Connect(function(i)
-		if isPress(i) then
+		if isPress(i) and not body.Locked then
 			dragging = true
 			dragStart = i.Position
 			startPos = frame.Position
@@ -1051,6 +1051,8 @@ function ImGui.Window(title, opts)
 	UIS.InputEnded:Connect(function(i) if isPress(i) then dragging = false end end)
 
 	body.Root = frame
+	body.TitleBar = titleBar
+	body.Locked = false
 	function body:SetVisible(v) frame.Visible = v end
 	function body:Destroy() frame:Destroy() end
 	return body
