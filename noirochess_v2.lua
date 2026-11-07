@@ -69,7 +69,7 @@ local stats = {
 ImGui.Init({ ToggleKey = Enum.KeyCode.RightShift })
 local win = ImGui.Window("RoChess Noic hub", { Position = UDim2.fromOffset(100, 100), Width = 650 })
 
--- Fixed status badge (Only changes the text label, not the parent window)
+-- Top status badge
 win:TextColored("working", Color3.fromRGB(150, 255, 150))
 
 -- Use SidebarTabs
@@ -129,7 +129,13 @@ local setRight = setCols[2]
 
 -- Left Column
 setLeft:Section("Appearance")
-setLeft:Dropdown("Theme", {"default", "Dark", "Light"}, 1, function(val) end)
+
+-- FIXED: Now lists all available themes and applies them
+local themeNames = {"Blue", "Red", "Green", "Maroon", "Purple", "Pink", "Mint", "Navy"}
+setLeft:Dropdown("Theme", themeNames, 1, function(val)
+    ImGui.SetTheme(val)
+end)
+
 setLeft:Checkbox("Rainbow top bar", false, function(v) end)
 setLeft:Dropdown("Language", {"English", "Spanish", "Russian"}, 1, function(val) end)
 setLeft:Slider("UI scale", 0.5, 1.5, 1, function(v) end)
