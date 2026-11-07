@@ -244,30 +244,55 @@ do
     l.Parent = toastHolder
 end
 
+-- Button/slider callbacks run on a restricted thread that is not allowed to use Instance.new
+-- (error: "lacking capability Plugin"). Anything that creates instances or tweens is queued here
+-- and executed by a worker thread that was started by the script itself.
+local mainQueue = {}
+local function onMain(fn)
+    table.insert(mainQueue, fn)
+end
+
+task.spawn(function()
+    while running do
+        while #mainQueue > 0 do
+            local fn = table.remove(mainQueue, 1)
+            local ok, e = pcall(fn)
+            if not ok then warn("[NoiRoc] " .. tostring(e)) end
+        end
+        task.wait(0.03)
+    end
+end)
+
+local function tween(obj, info, goal)
+    onMain(function() TweenService:Create(obj, info, goal):Play() end)
+end
+
 local function notify(text)
     if not config.Notifications or loading or not running then return end
-    local t = Instance.new("TextLabel")
-    t.Size = UDim2.new(1, 0, 0, 24)
-    t.BackgroundColor3 = ImGui.Theme.TitleBgActive[1]
-    t.BorderSizePixel = 0
-    t.Font = Enum.Font.Code
-    t.TextSize = 14
-    t.TextColor3 = ImGui.Theme.Text
-    t.Text = text
-    t.Parent = toastHolder
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = ImGui.Theme.Border
-    stroke.Transparency = 0.5
-    stroke.Parent = t
-    task.delay(3, function()
-        if not t.Parent then return end
-        if config.Animations then
-            local info = TweenInfo.new(0.3)
-            TweenService:Create(t, info, { BackgroundTransparency = 1, TextTransparency = 1 }):Play()
-            TweenService:Create(stroke, info, { Transparency = 1 }):Play()
-            task.wait(0.3)
-        end
-        t:Destroy()
+    onMain(function()
+        local t = Instance.new("TextLabel")
+        t.Size = UDim2.new(1, 0, 0, 24)
+        t.BackgroundColor3 = ImGui.Theme.TitleBgActive[1]
+        t.BorderSizePixel = 0
+        t.Font = Enum.Font.Code
+        t.TextSize = 14
+        t.TextColor3 = ImGui.Theme.Text
+        t.Text = text
+        t.Parent = toastHolder
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = ImGui.Theme.Border
+        stroke.Transparency = 0.5
+        stroke.Parent = t
+        task.delay(3, function()
+            if not t.Parent then return end
+            if config.Animations then
+                local info = TweenInfo.new(0.3)
+                TweenService:Create(t, info, { BackgroundTransparency = 1, TextTransparency = 1 }):Play()
+                TweenService:Create(stroke, info, { Transparency = 1 }):Play()
+                task.wait(0.3)
+            end
+            t:Destroy()
+        end)
     end)
 end
 
@@ -363,7 +388,7 @@ end), langNames)
 
 reg("UIScale", "num", setLeft:Slider("UI scale", 0.5, 1.5, 1, function(v)
     if config.Animations then
-        TweenService:Create(uiScale, TweenInfo.new(0.15, Enum.EasingStyle.Quad), { Scale = v }):Play()
+        tween(uiScale, TweenInfo.new(0.15, Enum.EasingStyle.Quad), { Scale = v })
     else
         uiScale.Scale = v
     end
@@ -386,7 +411,7 @@ local function moveWindowTo(x, y)
     local pos = root.Position
     local target = UDim2.new(pos.X.Scale, pos.X.Offset + (x - abs.X), pos.Y.Scale, pos.Y.Offset + (y - abs.Y))
     if config.Animations then
-        TweenService:Create(root, TweenInfo.new(0.25, Enum.EasingStyle.Quad), { Position = target }):Play()
+        tween(root, TweenInfo.new(0.25, Enum.EasingStyle.Quad), { Position = target })
     else
         root.Position = target
     end
@@ -449,9 +474,11 @@ local function listConfigs()
 end
 
 local function refreshConfigs()
-    local names = listConfigs()
-    if #names == 0 then names = {"None"} end
-    savedDrop:SetItems(names, true)
+    onMain(function()
+        local names = listConfigs()
+        if #names == 0 then names = {"None"} end
+        savedDrop:SetItems(names, true)
+    end)
 end
 
 local function currentConfigName()
